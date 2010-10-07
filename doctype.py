@@ -4,14 +4,6 @@ This module defines class hierarchies for parsing of EBML doctype declarations.
 It should not generally be neccesary to deal directly with anything here. 
 """
 
-__license__ = """
-is whatever
-"""
-
-__version__ = '1.0'
-
-__author__ = 'Stephen Morton'
-
 import os
 import re
 import datetime
