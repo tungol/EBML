@@ -15,12 +15,11 @@ __author__ = 'Stephen Morton'
 import os
 import re
 import datetime
-from spark import Token, GenericScanner
-from spark import GenericASTBuilder, AST, GenericASTTraversal
+import spark
 
 class BaseRange(object):
 	def __init__(self, value):
-		if type(value) == AST:
+		if type(value) == spark.AST:
 			value = self.tuplify(value)
 		self.value = value
 		self.check()
@@ -222,10 +221,10 @@ class LevelRange(BaseRange):
 
 class BaseList(object):
 	def __init__(self, values):
-		if type(values) == AST:
+		if type(values) == spark.AST:
 			values = self.listify(values)
 		for item in values[:]:
-			if type(item) in (tuple, AST):
+			if type(item) in (tuple, spark.AST):
 				values.remove(item)
 				item = self.process(item)
 				values.append(item)
@@ -732,14 +731,14 @@ class Doctype(DoctypeBase):
 	
 
 
-class EDTDScannerBase(GenericScanner):
+class EDTDScannerBase(spark.GenericScanner):
 	'Low priority tokens are found in this class'
 	def __init__(self):
-		GenericScanner.__init__(self)
+		spark.GenericScanner.__init__(self)
 	
 	def  tokenize(self, input):
 		self.rv = []
-		GenericScanner.tokenize(self, input)
+		spark.GenericScanner.tokenize(self, input)
 		return self.rv
 	
 	def t_line_comment(self, s):
@@ -756,52 +755,52 @@ class EDTDScannerBase(GenericScanner):
 	
 	def t_string(self, s):
 		r'"[ -~]*"'
-		t = Token(type='string', attr=s)
+		t = spark.Token(type='string', attr=s)
 		self.rv.append(t)
 	
 	def t_binary(self, s):
 		r'\b0x([A-Fa-f0-9]{2})+\b'
-		t = Token(type='binary', attr=s)
+		t = spark.Token(type='binary', attr=s)
 		self.rv.append(t)
 	
 	def t_alphanumeric(self, s):
 		r'\b([A-Fa-f0-9]{2})+\b|-?\b\d+\b|\b[A-Za-z_][A-Za-z_0-9]+\b'
-		t = Token(type='alphanumeric', attr=s)
+		t = spark.Token(type='alphanumeric', attr=s)
 		self.rv.append(t)
 	
 	def t_date(self, s):
 		r'\d{8}T\d{2}:\d{2}\d{2}(\.\d+)?'
-		t = Token(type='date', attr=s)
+		t = spark.Token(type='date', attr=s)
 		self.rv.append(t)
 	
 	def t_bracket(self, s):
 		r'{|}|\[|]'
-		t = Token(type=s)
+		t = spark.Token(type=s)
 		self.rv.append(t)
 	
 	def t_range(self, s):
 		r'\.\.'
-		t = Token(type=s)
+		t = spark.Token(type=s)
 		self.rv.append(t)
 	
 	def t_comparison(self, s):
 		r'<=|>=|<|>'
-		t = Token(type='comparison', attr=s)
+		t = spark.Token(type='comparison', attr=s)
 		self.rv.append(t)
 	
 	def t_sep(self, s):
 		r':|;|,'
-		t = Token(type=s)
+		t = spark.Token(type=s)
 		self.rv.append(t)
 	
 	def t_cardnality(self, s):
 		r'\*|\?|\+'
-		t = Token(type='cardnality', attr=s)
+		t = spark.Token(type='cardnality', attr=s)
 		self.rv.append(t)
 	
 	def t_percent(self, s):
 		r'%'
-		t = Token(type=s)
+		t = spark.Token(type=s)
 		self.rv.append(t)
 	
 
@@ -812,23 +811,23 @@ class EDTDScanner(EDTDScannerBase):
 	
 	def t_setter(self, s):
 		r':='
-		t = Token(type=s)
+		t = spark.Token(type=s)
 		self.rv.append(t)
 	
 	def t_float(self, s):
 		r'-?\b\d+\.\d+(e(\+|-)\d+)?\b'
-		t = Token(type='float', attr=s)
+		t = spark.Token(type='float', attr=s)
 		self.rv.append(t)
 	
 	def t_reserved(self, s):
 		r'\bdefine\b|\bdeclare\b|\bheader\b|\btypes\b|\belements\b'
-		t = Token(type=s)
+		t = spark.Token(type=s)
 		self.rv.append(t)
 	
 
-class EDTDParser(GenericASTBuilder):
-	def __init__(self, AST=AST, start='DTD'):
-		GenericASTBuilder.__init__(self, AST, start)
+class EDTDParser(spark.GenericASTBuilder):
+	def __init__(self, AST=spark.AST, start='DTD'):
+		spark.GenericASTBuilder.__init__(self, AST, start)
 	
 	def p_DTD(self, args):
 		'''
@@ -877,9 +876,9 @@ class EDTDParser(GenericASTBuilder):
 		'''
 	
 
-class CleanAST(GenericASTTraversal):
+class CleanAST(spark.GenericASTTraversal):
 	def __init__(self, ast):
-		GenericASTTraversal.__init__(self, ast)
+		spark.GenericASTTraversal.__init__(self, ast)
 		self.postorder()
 	
 	def n_DTD(self, node):
