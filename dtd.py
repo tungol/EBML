@@ -201,6 +201,7 @@ class ParentRange(BaseRange):
 	
 	def make_test(self):
 		self.test = lambda x: x == self.values[0]
+	
 
 class LevelRange(BaseRange):
 	def __init__(self, value):
