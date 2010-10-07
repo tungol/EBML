@@ -28,7 +28,7 @@ SOFTWARE, EVEN  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 __url__ = "lolbutts"
 __version__ = "1.0"
 
-import doctype
+import dtd
 from ebml import *
 
 

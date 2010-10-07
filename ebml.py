@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import os
-import doctype
+import dtd
 import bitstring
 
 class EOFError(Exception):
@@ -170,9 +170,9 @@ class EBML(object):
 	def __init__(self, filename, doctype=None):
 		self.filename = filename
 		if doctype:
-			self.doctype == doctype.Doctype(doctype)
+			self.doctype == dtd.Doctype(doctype)
 		else:
-			self.doctype = doctype.DoctypeBase()
+			self.doctype = dtd.DoctypeBase()
 			self.find_document_type()
 		self.build_document()
 	
@@ -184,7 +184,7 @@ class EBML(object):
 		for element in first_element:
 			if element.name == doctype_name:
 				type_name = element.payload
-				self.doctype = doctype.Doctype(type_name)
+				self.doctype = dtd.Doctype(type_name)
 				found = True
 				break
 		if not found:
