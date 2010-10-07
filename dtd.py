@@ -437,7 +437,7 @@ class ElementTypeClass(object):
 			'size': UintRangeList,
 			'children': [True, False]
 		}
-		self.valid_property = self.property_check.keys()
+		self.valid_property = list(self.property_check.keys())
 		self.has_property = set(('name', 'valtype', 'range', 'size'))
 		self.apply_setup(basetype)
 		self.add_property('id')
@@ -481,9 +481,6 @@ class ElementTypeClass(object):
 			self.parent.append(parent)
 		else:
 			self.parent = ParentRangeList([parent])
-	
-	def get_properties(self):
-		return zip(self.has_property, [self.__dict__[x] for x in self.has_property])
 	
 	def set_properties(self, properties):
 		for kind, value in properties:
@@ -714,7 +711,7 @@ class DoctypeBase(object):
 		return properties
 	
 	def get_ids(self):
-		return self.elements_id.keys()
+		return list(self.elements_id.keys())
 	
 	def lookup(self, value):
 		if value in self.elements_id:
