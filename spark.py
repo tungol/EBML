@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 __license__='''
 #  Copyright (c) 1998-2002 John Aycock
 #  
@@ -111,7 +113,7 @@ def _namelist(instance):
 				namedict[name] = 1
 	return namelist
 
-class GenericScanner:
+class GenericScanner(object):
 	def __init__(self, flags=0):
 		pattern = self.reflect()
 		self.re = re.compile(pattern, re.VERBOSE|flags)
@@ -135,8 +137,7 @@ class GenericScanner:
 		return string.join(rv, '|')
 	
 	def error(self, s, pos):
-		print "Lexical error at position %s" % pos
-		raise SystemExit
+		raise SystemExit("Lexical error at position %s" % pos)
 	
 	def position(self, newpos=None):
 		oldpos = self.pos
@@ -162,20 +163,19 @@ class GenericScanner:
 	
 	def t_default(self, s):
 		r'( . | \n )+'
-		print "Specification error: unmatched input"
-		raise SystemExit
+		raise SystemExit("Specification error: unmatched input")
 	
 
 #
 #  Extracted from GenericParser and made global so that [un]picking works.
 #
-class _State:
+class _State(object):
 	def __init__(self, stateno, items):
 		self.T, self.complete, self.items = [], [], items
 		self.stateno = stateno
 	
 
-class GenericParser:
+class GenericParser(object):
 	#
 	#  An Earley parser, as per J. Earley, "An Efficient Context-Free
 	#  Parsing Algorithm", CACM 13(2), pp. 94-102.  Also J. C. Earley,
@@ -382,8 +382,7 @@ class GenericParser:
 		return None
 	
 	def error(self, token):
-		print "Syntax error at or near `%s' token" % token
-		raise SystemExit
+		raise SystemExit("Syntax error at or near `%s' token" % token)
 	
 	def parse(self, tokens):
 		sets = [ [(1,0), (2,0)] ]
@@ -691,7 +690,7 @@ class GenericParser:
 			rule = self.ambiguity(self.newrules[nt])
 		else:
 			rule = self.newrules[nt][0]
-		#print rule
+		#print(rule)
 		
 		rhs = rule[1]
 		attr = [None] * len(rhs)
@@ -710,7 +709,7 @@ class GenericParser:
 		rule = choices[0]
 		if len(choices) > 1:
 			rule = self.ambiguity(choices)
-		#print rule
+		#print(rule)
 		
 		rhs = rule[1]
 		attr = [None] * len(rhs)
@@ -807,10 +806,10 @@ class GenericASTBuilder(GenericParser):
 #  preorder traversal.  Node type is determined via the typestring() method.
 #
 
-class GenericASTTraversalPruningException:
+class GenericASTTraversalPruningException(object):
 	pass
 
-class GenericASTTraversal:
+class GenericASTTraversal(object):
 	def __init__(self, ast):
 		self.ast = ast
 	
@@ -917,15 +916,15 @@ class GenericASTMatcher(GenericParser):
 
 def _dump(tokens, sets, states):
 	for i in range(len(sets)):
-		print 'set', i
+		print('set', i)
 		for item in sets[i]:
-			print '\t', item
+			print('\t', item)
 			for (lhs, rhs), pos in states[item[0]].items:
-				print '\t\t', lhs, '::=',
-				print string.join(rhs[:pos]),
-				print '.',
-				print string.join(rhs[pos:])
+				print('\t\t', lhs, '::=',)
+				print(string.join(rhs[:pos]),)
+				print('.',)
+				print(string.join(rhs[pos:]))
 		if i < len(tokens):
-			print
-			print 'token', str(tokens[i])
-			print
+			print()
+			print('token', str(tokens[i]))
+			print()
