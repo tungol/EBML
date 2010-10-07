@@ -1,3 +1,4 @@
+__license__='''
 #  Copyright (c) 1998-2002 John Aycock
 #  
 #  Permission is hereby granted, free of charge, to any person obtaining
@@ -21,8 +22,9 @@
 
 # Sourced from SPARK by John Aycock 
 # site: http://pages.cpsc.ucalgary.ca/~aycock/spark/
+'''
 
-__version__ = 'SPARK-0.7 (pre-alpha-7)'
+__version__ = 'SPARK-0.7 (pre-alpha-7) (EBML mod)'
 
 import re
 import sys
@@ -32,7 +34,7 @@ class AST(object):
 	def __init__(self, type):
 		self.type = type
 		self._kids = []
-
+	
 	#
 	#  Not all these may be needed, depending on which classes you use:
 	#
@@ -43,27 +45,35 @@ class AST(object):
 	#
 	def __getitem__(self, i):
 		return self._kids[i]
+	
 	def __len__(self):
 		return len(self._kids)
+	
 	def __setslice__(self, low, high, seq):
 		self._kids[low:high] = seq
+	
 	def __cmp__(self, o):
 		return cmp(self.type, o)
+	
 	def __repr__(self):
 		return repr((self.type, self._kids))
+	
 	def get_children(self):
 		return self._kids[:]
+	
 	def add(self, child):
 		self._kids.append(child)
+	
 	def remove(self, child):
 		self._kids.remove(child)
+	
 
 
 class Token(object):
 	def __init__(self, type, attr=None):
 		self.type = type
 		self.attr = attr
-
+	
 	#
 	#  Not all these may be needed:
 	#
@@ -75,10 +85,13 @@ class Token(object):
 	#  
 	def __cmp__(self, o):
 		return cmp(self.type, o)
+	
 	def __repr__(self):
 		return repr((self.type, self.attr))
+	
 	def __getitem__(self, i):
 		raise IndexError
+	
 
 
 def _namelist(instance):
@@ -96,35 +109,35 @@ class GenericScanner:
 	def __init__(self, flags=0):
 		pattern = self.reflect()
 		self.re = re.compile(pattern, re.VERBOSE|flags)
-
+		
 		self.index2func = {}
 		for name, number in self.re.groupindex.items():
 			self.index2func[number-1] = getattr(self, 't_' + name)
-
+	
 	def makeRE(self, name):
 		doc = getattr(self, name).__doc__
 		rv = '(?P<%s>%s)' % (name[2:], doc)
 		return rv
-
+	
 	def reflect(self):
 		rv = []
 		for name in _namelist(self):
 			if name[:2] == 't_' and name != 't_default':
 				rv.append(self.makeRE(name))
-
+		
 		rv.append(self.makeRE('t_default'))
 		return string.join(rv, '|')
-
+	
 	def error(self, s, pos):
 		print "Lexical error at position %s" % pos
 		raise SystemExit
-
+	
 	def position(self, newpos=None):
 		oldpos = self.pos
 		if newpos is not None:
 			self.pos = newpos
 		return self.string, oldpos
-		
+	
 	def tokenize(self, s):
 		self.string = s
 		self.pos = 0
@@ -133,18 +146,19 @@ class GenericScanner:
 			m = self.re.match(s, self.pos)
 			if m is None:
 				self.error(s, self.pos)
-
+				
 			groups = m.groups()
 			self.pos = m.end()
 			for i in range(len(groups)):
 				if groups[i] is not None and \
 				   self.index2func.has_key(i):
 					self.index2func[i](groups[i])
-
+	
 	def t_default(self, s):
 		r'( . | \n )+'
 		print "Specification error: unmatched input"
 		raise SystemExit
+	
 
 #
 #  Extracted from GenericParser and made global so that [un]picking works.
@@ -153,6 +167,7 @@ class _State:
 	def __init__(self, stateno, items):
 		self.T, self.complete, self.items = [], [], items
 		self.stateno = stateno
+	
 
 class GenericParser:
 	#
@@ -165,7 +180,7 @@ class GenericParser:
 	#  2001, and J. Aycock and R. N. Horspool, "Practical Earley
 	#  Parsing", unpublished paper, 2001.
 	#
-
+	
 	def __init__(self, start):
 		self.rules = {}
 		self.rule2func = {}
@@ -173,11 +188,11 @@ class GenericParser:
 		self.collectRules()
 		self.augment(start)
 		self.ruleschanged = 1
-
+	
 	_NULLABLE = '\e_'
 	_START = 'START'
 	_BOF = '|-'
-
+	
 	#
 	#  When pickling, take the time to generate the full state machine;
 	#  some information is then extraneous, too.  Unfortunately we
@@ -215,7 +230,7 @@ class GenericParser:
 		del rv['nullable']
 		del rv['cores']
 		return rv
-
+	
 	def __setstate__(self, D):
 		self.rules = {}
 		self.rule2func = {}
@@ -226,32 +241,33 @@ class GenericParser:
 		D['rule2func'] = self.rule2func
 		D['makeSet'] = self.makeSet_fast
 		self.__dict__ = D
-
+	
 	#
 	#  A hook for GenericASTBuilder and GenericASTMatcher.  Mess
 	#  thee not with this; nor shall thee toucheth the _preprocess
 	#  argument to addRule.
 	#
-	def preprocess(self, rule, func):	return rule, func
-
+	def preprocess(self, rule, func):
+		return rule, func
+	
 	def addRule(self, doc, func, _preprocess=1):
 		fn = func
 		rules = string.split(doc)
-
+		
 		index = []
 		for i in range(len(rules)):
 			if rules[i] == '::=':
 				index.append(i-1)
 		index.append(len(rules))
-
+		
 		for i in range(len(index)-1):
 			lhs = rules[index[i]]
 			rhs = rules[index[i]+2:index[i+1]]
 			rule = (lhs, tuple(rhs))
-
+			
 			if _preprocess:
 				rule, fn = self.preprocess(rule, func)
-
+				
 			if self.rules.has_key(lhs):
 				self.rules[lhs].append(rule)
 			else:
@@ -259,22 +275,22 @@ class GenericParser:
 			self.rule2func[rule] = fn
 			self.rule2name[rule] = func.__name__[2:]
 		self.ruleschanged = 1
-
+	
 	def collectRules(self):
 		for name in _namelist(self):
 			if name[:2] == 'p_':
 				func = getattr(self, name)
 				doc = func.__doc__
 				self.addRule(doc, func)
-
+	
 	def augment(self, start):
 		rule = '%s ::= %s %s' % (self._START, self._BOF, start)
 		self.addRule(rule, lambda args: args[1], 0)
-
+	
 	def computeNull(self):
 		self.nullable = {}
 		tbd = []
-
+		
 		for rulelist in self.rules.values():
 			lhs = rulelist[0][0]
 			self.nullable[lhs] = 0
@@ -306,13 +322,13 @@ class GenericParser:
 				else:
 					self.nullable[lhs] = 1
 					changes = 1
-
+	
 	def makeState0(self):
 		s0 = _State(0, [])
 		for rule in self.newrules[self._START]:
 			s0.items.append((rule, 0))
 		return s0
-
+	
 	def finalState(self, tokens):
 		#
 		#  Yuck.
@@ -321,13 +337,13 @@ class GenericParser:
 			return 1
 		start = self.rules[self._START][0][1][1]
 		return self.goto(1, start)
-
+	
 	def makeNewRules(self):
 		worklist = []
 		for rulelist in self.rules.values():
 			for rule in rulelist:
 				worklist.append((rule, 0, 1, rule))
-
+		
 		for rule, i, candidate, oldrule in worklist:
 			lhs, rhs = rule
 			n = len(rhs)
@@ -338,7 +354,7 @@ class GenericParser:
 					candidate = 0
 					i = i + 1
 					continue
-
+					
 				newrhs = list(rhs)
 				newrhs[i] = self._NULLABLE+sym
 				newrule = (lhs, tuple(newrhs))
@@ -358,11 +374,11 @@ class GenericParser:
 	
 	def typestring(self, token):
 		return None
-
+	
 	def error(self, token):
 		print "Syntax error at or near `%s' token" % token
 		raise SystemExit
-
+	
 	def parse(self, tokens):
 		sets = [ [(1,0), (2,0)] ]
 		self.links = {}
@@ -376,36 +392,36 @@ class GenericParser:
 			self.edges, self.cores = {}, {}
 			self.states = { 0: self.makeState0() }
 			self.makeState(0, self._BOF)
-
+			
 		for i in xrange(len(tokens)):
 			sets.append([])
-
+			
 			if sets[i] == []:
 				break				
 			self.makeSet(tokens[i], sets, i)
 		else:
 			sets.append([])
 			self.makeSet(None, sets, len(tokens))
-
+			
 		#_dump(tokens, sets, self.states)
-
+		
 		finalitem = (self.finalState(tokens), 0)
 		if finalitem not in sets[-2]:
 			if len(tokens) > 0:
 				self.error(tokens[i-1])
 			else:
 				self.error(None)
-
+				
 		return self.buildTree(self._START, finalitem,
 				      tokens, len(sets)-2)
-
+	
 	def isnullable(self, sym):
 		#
 		#  For symbols in G_e only.  If we weren't supporting 1.5,
 		#  could just use sym.startswith().
 		#
 		return self._NULLABLE == sym[0:len(self._NULLABLE)]
-
+	
 	def skip(self, (lhs, rhs), pos=0):
 		n = len(rhs)
 		while pos < n:
@@ -413,7 +429,7 @@ class GenericParser:
 				break
 			pos = pos + 1
 		return pos
-
+	
 	def makeState(self, state, sym):
 		assert sym is not None
 		#
@@ -426,7 +442,7 @@ class GenericParser:
 			if rhs[pos:pos+1] == (sym,):
 				kitems.append((rule, self.skip(rule, pos+1)))
 		core = kitems
-
+		
 		core.sort()
 		tcore = tuple(core)
 		if self.cores.has_key(tcore):
@@ -439,7 +455,7 @@ class GenericParser:
 		K, NK = _State(k, kitems), _State(k+1, [])
 		self.states[k] = K
 		predicted = {}
-
+		
 		edges = self.edges
 		rules = self.newrules
 		for X in K, NK:
@@ -450,7 +466,7 @@ class GenericParser:
 				if pos == len(rhs):
 					X.complete.append(rule)
 					continue
-
+					
 				nextSym = rhs[pos]
 				key = (X.stateno, nextSym)
 				if not rules.has_key(nextSym):
@@ -474,10 +490,10 @@ class GenericParser:
 			#
 			if X is K:
 				edges = {}
-
+				
 		if NK.items == []:
 			return k
-
+			
 		#
 		#  Check for \epsilon-nonkernel's core.  Unfortunately we
 		#  need to know the entire set of predicted nonterminals
@@ -489,12 +505,12 @@ class GenericParser:
 		if self.cores.has_key(tcore):
 			self.edges[(k, None)] = self.cores[tcore]
 			return k
-
+			
 		nk = self.cores[tcore] = self.edges[(k, None)] = NK.stateno
 		self.edges.update(edges)
 		self.states[nk] = NK
 		return k
-
+	
 	def goto(self, state, sym):
 		key = (state, sym)
 		if not self.edges.has_key(key):
@@ -502,7 +518,7 @@ class GenericParser:
 			#  No transitions from state on sym.
 			#
 			return None
-
+			
 		rv = self.edges[key]
 		if rv is None:
 			#
@@ -511,17 +527,17 @@ class GenericParser:
 			rv = self.makeState(state, sym)
 			self.edges[key] = rv
 		return rv
-
+	
 	def gotoT(self, state, t):
 		return [self.goto(state, t)]
-
+	
 	def gotoST(self, state, st):
 		rv = []
 		for t in self.states[state].T:
 			if st == t:
 				rv.append(self.goto(state, t))
 		return rv
-
+	
 	def add(self, set, item, i=None, predecessor=None, causal=None):
 		if predecessor is None:
 			if item not in set:
@@ -532,16 +548,16 @@ class GenericParser:
 				self.links[key] = []
 				set.append(item)
 			self.links[key].append((predecessor, causal))
-
+	
 	def makeSet(self, token, sets, i):
 		cur, next = sets[i], sets[i+1]
-
+		
 		ttype = token is not None and self.typestring(token) or None
 		if ttype is not None:
 			fn, arg = self.gotoT, ttype
 		else:
 			fn, arg = self.gotoST, token
-
+			
 		for item in cur:
 			ptr = (item, i)
 			state, parent = item
@@ -552,10 +568,10 @@ class GenericParser:
 					nk = self.goto(k, None)
 					if nk is not None:
 						self.add(next, (nk, i+1))
-
+						
 			if parent == i:
 				continue
-
+				
 			for rule in self.states[state].complete:
 				lhs, rhs = rule
 				for pitem in sets[parent]:
@@ -569,7 +585,7 @@ class GenericParser:
 						nk = self.goto(k, None)
 						if nk is not None:
 							self.add(cur, (nk, i))
-
+	
 	def makeSet_fast(self, token, sets, i):
 		#
 		#  Call *only* when the entire state machine has been built!
@@ -579,7 +595,7 @@ class GenericParser:
 		#
 		cur, next = sets[i], sets[i+1]
 		ttype = token is not None and self.typestring(token) or None
-
+		
 		for item in cur:
 			ptr = (item, i)
 			state, parent = item
@@ -613,10 +629,10 @@ class GenericParser:
 						nk = self.edges.get((k, None), None)
 						if nk is not None:
 							self.add(next, (nk, i+1))
-
+							
 			if parent == i:
 				continue
-
+				
 			for rule in self.states[state].complete:
 				lhs, rhs = rule
 				for pitem in sets[parent]:
@@ -645,13 +661,13 @@ class GenericParser:
 							if new not in cur:
 								cur.append(new)
 							#INLINED --^
-
+	
 	def predecessor(self, key, causal):
 		for p, c in self.links[key]:
 			if c == causal:
 				return p
 		assert 0
-
+	
 	def causal(self, key):
 		links = self.links[key]
 		if len(links) == 1:
@@ -663,24 +679,24 @@ class GenericParser:
 			choices.append(rule)
 			rule2cause[rule] = c
 		return rule2cause[self.ambiguity(choices)]
-
+	
 	def deriveEpsilon(self, nt):
 		if len(self.newrules[nt]) > 1:
 			rule = self.ambiguity(self.newrules[nt])
 		else:
 			rule = self.newrules[nt][0]
 		#print rule
-
+		
 		rhs = rule[1]
 		attr = [None] * len(rhs)
-
+		
 		for i in range(len(rhs)-1, -1, -1):
 			attr[i] = self.deriveEpsilon(rhs[i])
 		return self.rule2func[self.new2old[rule]](attr)
-
+	
 	def buildTree(self, nt, item, tokens, k):
 		state, parent = item
-
+		
 		choices = []
 		for rule in self.states[state].complete:
 			if rule[0] == nt:
@@ -689,10 +705,10 @@ class GenericParser:
 		if len(choices) > 1:
 			rule = self.ambiguity(choices)
 		#print rule
-
+		
 		rhs = rule[1]
 		attr = [None] * len(rhs)
-
+		
 		for i in range(len(rhs)-1, -1, -1):
 			sym = rhs[i]
 			if not self.newrules.has_key(sym):
@@ -710,7 +726,7 @@ class GenericParser:
 							 tokens, why[1])
 				item, k = self.predecessor(key, why)
 		return self.rule2func[self.new2old[rule]](attr)
-
+	
 	def ambiguity(self, rules):
 		#
 		#  XXX - problem here and in collectRules() if the same rule
@@ -727,7 +743,7 @@ class GenericParser:
 		sortlist.sort()
 		list = map(lambda (a,b): b, sortlist)
 		return rules[name2index[self.resolve(list)]]
-
+	
 	def resolve(self, list):
 		#
 		#  Resolve ambiguity in favor of the shortest RHS.
@@ -735,6 +751,7 @@ class GenericParser:
 		#  should effectively resolve in favor of a "shift".
 		#
 		return list[0]
+	
 
 #
 #  GenericASTBuilder automagically constructs a concrete/abstract syntax tree
@@ -748,14 +765,14 @@ class GenericASTBuilder(GenericParser):
 	def __init__(self, AST, start):
 		GenericParser.__init__(self, start)
 		self.AST = AST
-
+	
 	def preprocess(self, rule, func):
 		rebind = lambda lhs, self=self: \
 				lambda args, lhs=lhs, self=self: \
 					self.buildASTNode(args, lhs)
 		lhs, rhs = rule
 		return rule, rebind(lhs)
-
+	
 	def buildASTNode(self, args, lhs):
 		children = []
 		for arg in args:
@@ -764,13 +781,15 @@ class GenericASTBuilder(GenericParser):
 			else:
 				children.append(self.terminal(arg))
 		return self.nonterminal(lhs, children)
-
-	def terminal(self, token):	return token
-
+	
+	def terminal(self, token):
+		return token
+	
 	def nonterminal(self, type, args):
 		rv = self.AST(type)
 		rv[:len(args)] = args
 		return rv
+	
 
 #
 #  GenericASTTraversal is a Visitor pattern according to Design Patterns.  For
@@ -788,17 +807,17 @@ class GenericASTTraversalPruningException:
 class GenericASTTraversal:
 	def __init__(self, ast):
 		self.ast = ast
-
+	
 	def typestring(self, node):
 		return node.type
-
+	
 	def prune(self):
 		raise GenericASTTraversalPruningException
-
+	
 	def preorder(self, node=None):
 		if node is None:
 			node = self.ast
-
+		
 		try:
 			name = 'n_' + self.typestring(node)
 			if hasattr(self, name):
@@ -808,32 +827,33 @@ class GenericASTTraversal:
 				self.default(node)
 		except GenericASTTraversalPruningException:
 			return
-
+			
 		for kid in node:
 			self.preorder(kid)
-
+			
 		name = name + '_exit'
 		if hasattr(self, name):
 			func = getattr(self, name)
 			func(node)
-
+	
 	def postorder(self, node=None):
 		if node is None:
 			node = self.ast
-
+			
 		for kid in node:
 			self.postorder(kid)
-
+			
 		name = 'n_' + self.typestring(node)
 		if hasattr(self, name):
 			func = getattr(self, name)
 			func(node)
 		else:
 			self.default(node)
-
-
+	
 	def default(self, node):
 		pass
+	
+
 
 #
 #  GenericASTMatcher.  AST nodes must have "__getitem__" and "__cmp__"
@@ -846,7 +866,7 @@ class GenericASTMatcher(GenericParser):
 	def __init__(self, start, ast):
 		GenericParser.__init__(self, start)
 		self.ast = ast
-
+	
 	def preprocess(self, rule, func):
 		rebind = lambda func, self=self: \
 				lambda args, func=func, self=self: \
@@ -854,39 +874,40 @@ class GenericASTMatcher(GenericParser):
 		lhs, rhs = rule
 		rhslist = list(rhs)
 		rhslist.reverse()
-
+		
 		return (lhs, tuple(rhslist)), rebind(func)
-
+	
 	def foundMatch(self, args, func):
 		func(args[-1])
 		return args[-1]
-
+	
 	def match_r(self, node):
 		self.input.insert(0, node)
 		children = 0
-
+		
 		for child in node:
 			if children == 0:
 				self.input.insert(0, '(')
 			children = children + 1
 			self.match_r(child)
-
+			
 		if children > 0:
 			self.input.insert(0, ')')
-
+	
 	def match(self, ast=None):
 		if ast is None:
 			ast = self.ast
 		self.input = []
-
+		
 		self.match_r(ast)
 		self.parse(self.input)
-
+	
 	def resolve(self, list):
 		#
 		#  Resolve ambiguity in favor of the longest RHS.
 		#
 		return list[-1]
+	
 
 def _dump(tokens, sets, states):
 	for i in range(len(sets)):
