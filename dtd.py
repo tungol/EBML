@@ -17,7 +17,6 @@ import re
 import datetime
 from spark import Token, GenericScanner
 from spark import GenericASTBuilder, AST, GenericASTTraversal
-from binary_encoders import encode_binary, isodate_to_nanoseconds
 
 class BaseRange(object):
 	def __init__(self, value):
@@ -40,7 +39,7 @@ class BaseRange(object):
 			elif item.type == 'comparison':
 				value_list.append(item.attr)
 			elif item.type == 'date':
-				date = isodate_to_nanoseconds(item.attr)
+				date = self.convert_date(item.attr)
 				value_list.append(date)
 			elif item.type == 'alphanumeric':
 				value_list.append(int(item.attr))
@@ -163,6 +162,25 @@ class DateRange(BaseRange):
 			assert type(v[0]) == int
 			assert v[1] == '..'
 			assert type(v[2]) == int
+	
+	def convert_date(self, isodate):
+		year = int(isodate[:4])
+		month = int(isodate[4:6])
+		day = int(isodate[6:8])
+		hour = int(isodate[9:11])
+		minute = int(isodate[12:14])
+		second = int(isodate[15:17])
+		if len(isodate) > 17:
+			fraction = 	float(isodate[17:]) * 1000000
+		else:
+			fraction = 0
+		epoch = datetime.datetime(2001, 1, 1, 0, 0, 0, 0)
+		date = datetime.datetime(year, month, day, hour, minute, second, fraction)
+		delta = date - epoch
+		nano = 864 * 10**11 * delta.days
+		nano += 10**9 * delta.seconds
+		nano += 10**3 * delta.microseconds
+		return nano
 	
 
 class ParentRange(BaseRange):
@@ -626,7 +644,7 @@ class DoctypeBase(object):
 		else:
 			name = kids[0].attr
 			id_string = kids[1].attr
-			hexid = encode_binary(id_string)
+			hexid = id_string.decode('hex')
 			type_class = self.types[kids[2].attr]
 			element = ElementTypeClass(name, hexid, type_class)
 			self.elements_name.update({name: element})
