@@ -43,7 +43,7 @@ class AST(object):
 	#
 	#  __getitem__		GenericASTTraversal, GenericASTMatcher
 	#  __len__		GenericASTBuilder
-	#  __setslice__		GenericASTBuilder
+	#  __setitem__		GenericASTBuilder
 	#  __cmp__		GenericASTMatcher
 	#
 	def __getitem__(self, i):
@@ -137,7 +137,7 @@ class GenericScanner(object):
 		return string.join(rv, '|')
 	
 	def error(self, s, pos):
-		raise SystemExit("Lexical error at position %s" % pos)
+		raise SyntaxError("Lexical error at position %s" % pos)
 	
 	def position(self, newpos=None):
 		oldpos = self.pos
@@ -163,7 +163,7 @@ class GenericScanner(object):
 	
 	def t_default(self, s):
 		r'( . | \n )+'
-		raise SystemExit("Specification error: unmatched input")
+		raise SyntaxError("Specification error: unmatched input")
 	
 
 #
@@ -382,7 +382,7 @@ class GenericParser(object):
 		return None
 	
 	def error(self, token):
-		raise SystemExit("Syntax error at or near `%s' token" % token)
+		raise SyntaxError("Syntax error at or near `%s' token" % token)
 	
 	def parse(self, tokens):
 		sets = [ [(1,0), (2,0)] ]
@@ -806,7 +806,7 @@ class GenericASTBuilder(GenericParser):
 #  preorder traversal.  Node type is determined via the typestring() method.
 #
 
-class GenericASTTraversalPruningException(object):
+class GenericASTTraversalPruningException(Exception):
 	pass
 
 class GenericASTTraversal(object):
