@@ -31,6 +31,7 @@ import sys
 import string
 
 class AST(object):
+	__slots__ = ['type', '_kids']
 	def __init__(self, type):
 		self.type = type
 		self._kids = []
@@ -49,8 +50,13 @@ class AST(object):
 	def __len__(self):
 		return len(self._kids)
 	
-	def __setslice__(self, low, high, seq):
-		self._kids[low:high] = seq
+	def __setitem__(self, key, value):
+		if key in self.__slots__:
+			object.__setitem__(key, value)
+		elif type(key) == slice:
+			self._kids[key] = value
+		else:
+			raise AttributeError
 	
 	def __cmp__(self, o):
 		return cmp(self.type, o)
@@ -87,7 +93,7 @@ class Token(object):
 		return cmp(self.type, o)
 	
 	def __repr__(self):
-		return repr((self.type, self.attr))
+		return 'Token(%r, %r)' % (self.type, self.attr)
 	
 	def __getitem__(self, i):
 		raise IndexError
