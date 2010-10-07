@@ -4,6 +4,9 @@ import os
 import dtd
 import bitstring
 
+class EOFError(Exception):
+	pass
+
 class Reference(object):
 	def __init__(self, doctype, filename, offset):
 		self.doctype = doctype
@@ -67,10 +70,10 @@ class Reference(object):
 			while True:
 				byte = file.read(1)
 				if byte == '':
-					raise SyntaxError('Unexpected EOF.')
+					raise EOFError('Unexpected EOF.')
 				hexid += byte
 				if len(hexid) > 8:
-					raise SyntaxError('Should have found an id by now: %r') % hexid
+					raise EOFError('Should have found an id by now: %r') % hexid
 				if hexid in self.doctype.get_ids():
 					break
 		self.hexid = hexid
@@ -88,7 +91,7 @@ class Reference(object):
 			while True:
 				byte = file.read(1)
 				if byte == '':
-					raise SyntaxError('Unexpected EOF.')
+					raise EOFError('Unexpected EOF.')
 				bytecount += 1
 				bits += self.get_bits(byte)
 				bitcount = 0
@@ -128,7 +131,7 @@ class Reference(object):
 			offset = self.payload_offset
 			while offset != self.end:
 				if offset > self.end:
-					raise SyntaxError('Went too far, file is damaged.')
+					raise EOFError('Went too far, file is damaged.')
 				reference = Reference(self.doctype, self.filename, offset)
 				offset += reference.total_length
 				self.payload.append(reference)
@@ -195,7 +198,7 @@ class EBML(object):
 			if offset == end:
 				break
 			elif offset > end:
-				raise SyntaxError('Went too far, file is damaged.')
+				raise EOFError('Went too far, file is damaged.')
 			reference = Reference(self.doctype, self.filename, offset)
 			self.children.append(reference)
 			offset = reference.end
