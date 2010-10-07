@@ -1,3 +1,17 @@
+'''
+Sourced largely from SPARK-0.7 (pre-alpha-7), by John Aycock, see the license 
+for a link. Some parts that I wasn't using have been removed. The AST and Token 
+classes are modified versions of the ones included in the examples folder of the
+SPARK-0.6.1 release. I've touched up things here and there to alter the style 
+in some places to be more to my taste and also to remove some now deprecated 
+methods, in anticipation of making this work on 3.* someday. The 0.7a7 release 
+*was* in 2002, so it's hardly surprising that it didn't have an eye towards 
+python 3000.
+
+Any other users of this file may have to do some light editing, I haven't tried
+to maintain the package's generality in making my edits. Sorry.
+'''
+
 from __future__ import print_function
 
 __license__='''
@@ -26,7 +40,7 @@ Sourced from SPARK by John Aycock
 site: http://pages.cpsc.ucalgary.ca/~aycock/spark/
 '''
 
-__version__ = 'SPARK-0.7 (pre-alpha-7) (EBML mod)'
+__version__ = 'SPARK (EBML mod)'
 
 __all__ = ['Token, AST', 'GenericScanner', 'GenericASTBuilder', 'GenericASTTraversal']
 
