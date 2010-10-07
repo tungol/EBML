@@ -42,8 +42,6 @@ site: http://pages.cpsc.ucalgary.ca/~aycock/spark/
 
 __version__ = 'SPARK (EBML mod)'
 
-__all__ = ['Token, AST', 'GenericScanner', 'GenericASTBuilder', 'GenericASTTraversal']
-
 import re
 import sys
 import string
