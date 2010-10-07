@@ -2,7 +2,6 @@ from __future__ import print_function
 
 import os
 import dtd
-from binary_encoders import *
 import bitstring
 
 class Reference(object):
@@ -29,13 +28,13 @@ class Reference(object):
 	def __getattr__(self, name):
 		if name == 'hexid':
 			return self.get_hexid()
-		elif name == 'size':
-			return self.get_size()
+		elif name == 'payload_length':
+			return self.get_payload_length()
 		elif name == 'name':
 			self.name = self.doctype.lookup(self.hexid).name
 			return self.name
 		elif name == 'end':
-			self.end = self.full_length + self.hexid_offset
+			self.end = self.total_length + self.hexid_offset
 			return self.end
 		elif name == 'payload':
 			return self.get_payload()
@@ -43,20 +42,19 @@ class Reference(object):
 			self.valtype = self.doctype.lookup(self.hexid).valtype
 			return self.valtype
 		elif name == 'hexid_length':
-			self.get_hexid()
+			self.hexid_length = len(self.hexid)
 			return self.hexid_length
 		elif name == 'size_offset':
-			self.get_hexid()
+			self.size_offset = self.hexid_offset + self.hexid_length
 			return self.size_offset
 		elif name == 'size_length':
-			self.get_size()
-			return self.size_length
+			return self.get_size_length()
 		elif name == 'payload_offset':
-			self.get_size()
+			self.payload_offset = self.size_offset + self.size_length
 			return self.payload_offset
-		elif name == 'full_length':
-			self.full_length = self.hexid_length + self.size_length + self.size
-			return self.full_length
+		elif name == 'total_length':
+			self.total_length = self.hexid_length + self.size_length + self.payload_length
+			return self.total_length
 		else:
 			raise AttributeError
 	
@@ -80,40 +78,39 @@ class Reference(object):
 		self.size_offset = self.hexid_offset + self.hexid_length
 		return hexid
 	
-	def get_size(self):
-		if 'size' in dir(self):
-			return self.size
+	def get_size_length(self):
+		if 'size_length' in dir(self):
+			return self.G_length
 		bits = []
 		bytecount = 0
-		bytes = ''
 		with open(self.filename, 'rb') as file:
 			file.seek(self.size_offset)
 			while True:
 				byte = file.read(1)
-				bytes += byte
 				if byte == '':
 					raise SyntaxError('Unexpected EOF.')
 				bytecount += 1
 				bits += self.get_bits(byte)
 				bitcount = 0
-				one_found = False
 				for bit in bits:
 					bitcount += 1
 					if bit == '1':
-						one_found = True
-						break
-				if one_found:
-					break
-			extra_bytes = file.read(bitcount - bytecount)
-		bits += self.get_bits(extra_bytes)
+						self.size_length = bitcount
+						return self.size_length		
+	
+	def get_payload_length(self):
+		if 'payload_length' in dir(self):
+			return self.payload_length
+		with open(self.filename, 'rb') as file:
+			file.seek(self.size_offset)
+			bytes = file.read(self.size_length)
+		bits = self.get_bits(bytes)
 		index = bits.index('1')
 		del bits[:index + 1]
 		bitstring = '0b' + ''.join(bits)
-		size = int(bitstring, 2)
-		self.size = size
-		self.size_length = bitcount
-		self.payload_offset = self.size_offset + self.size_length
-		return size
+		payload_length = int(bitstring, 2)
+		self.payload_length = payload_length
+		return self.payload_length
 	
 	def get_bits(self, hexstring):
 		allbits = []
@@ -126,34 +123,34 @@ class Reference(object):
 		return allbits
 	
 	def get_payload(self):
-		with open(self.filename, 'rb') as file:
-			file.seek(self.payload_offset)
-			if self.valtype == 'container':
-				self.payload = []
-				while True:
-					offset = file.tell()
-					if offset == self.end:
-						break
-					elif offset > self.end:
-						raise SyntaxError('Went too far, file is damaged.')
-					reference = Reference(self.doctype, self.filename, offset)
-					self.payload.append(reference)
-					file.seek(reference.end)
-			else:
-				raw = file.read(self.size)
-				if self.valtype == 'uint':
-					self.payload = decode_uint(raw)
-				elif self.valtype == 'int':
-					self.payload = decode_twos_complement(raw)
-				elif self.valtype == 'float':
-					self.payload = decode_ieee_float(raw)
-				elif self.valtype == 'string':
-					self.payload = raw
-				elif self.valtype == 'date':
-					self.payload = decode_date(raw)
-				elif self.valtype == 'binary':
-					self.payload = raw
-			return self.payload
+		if self.valtype == 'container':
+			self.payload = []
+			offset = self.payload_offset
+			while offset != self.end:
+				if offset > self.end:
+					raise SyntaxError('Went too far, file is damaged.')
+				reference = Reference(self.doctype, self.filename, offset)
+				offset += reference.total_length
+				self.payload.append(reference)
+		else:
+			raw_payload = bitstring.Bits(filename=self.filename, offset=self.payload_offset*8, 
+				length=self.payload_length*8)
+			if self.valtype == 'uint':
+				self.payload = raw_payload.uint
+			elif self.valtype == 'int':
+				self.payload = raw_payload.int
+			elif self.valtype == 'float':
+				self.payload = raw_payload.float
+			elif self.valtype == 'string':
+				self.payload = raw_payload.bytes
+			elif self.valtype == 'date':
+				self.payload = raw_payload.int
+			elif self.valtype == 'binary':
+				if len(raw_payload) < 8 * 16:
+					self.payload = raw_payload.bytes
+				else:
+					self.payload = 'Large binary object'
+		return self.payload
 	
 
 class Element(object):
@@ -161,6 +158,10 @@ class Element(object):
 		self.doctype = doctype
 		self.hexid = hexid
 		self.payload = payload
+		self.name = doctype.lookup(hexid).name
+	
+	def __repr__(self):
+		return 'Element(%r, %r, %r)' % (self.doctype, self.name, self.payload)
 
 class EBML(object):
 	def __init__(self, filename, doctype=None):
@@ -198,7 +199,6 @@ class EBML(object):
 			reference = Reference(self.doctype, self.filename, offset)
 			self.children.append(reference)
 			offset = reference.end
-		print(self.children)
 	
 
 
