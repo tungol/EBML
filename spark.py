@@ -1,29 +1,29 @@
 from __future__ import print_function
 
 __license__='''
-#  Copyright (c) 1998-2002 John Aycock
-#  
-#  Permission is hereby granted, free of charge, to any person obtaining
-#  a copy of this software and associated documentation files (the
-#  "Software"), to deal in the Software without restriction, including
-#  without limitation the rights to use, copy, modify, merge, publish,
-#  distribute, sublicense, and/or sell copies of the Software, and to
-#  permit persons to whom the Software is furnished to do so, subject to
-#  the following conditions:
-#  
-#  The above copyright notice and this permission notice shall be
-#  included in all copies or substantial portions of the Software.
-#  
-#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-#  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-#  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-#  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-#  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-#  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-#  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+Copyright (c) 1998-2002 John Aycock
+  
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+  
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+  
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# Sourced from SPARK by John Aycock 
-# site: http://pages.cpsc.ucalgary.ca/~aycock/spark/
+Sourced from SPARK by John Aycock 
+site: http://pages.cpsc.ucalgary.ca/~aycock/spark/
 '''
 
 __version__ = 'SPARK-0.7 (pre-alpha-7) (EBML mod)'
@@ -72,15 +72,6 @@ class Token(object):
 		self.type = type
 		self.attr = attr
 	
-	#
-	#  Not all these may be needed:
-	#
-	#  __cmp__	required for GenericParser, required for
-	#			GenericASTMatcher only if your ASTs are
-	#			heterogeneous (i.e., AST nodes and tokens)
-	#  __repr__	recommended for nice error messages in GenericParser
-	#  __getitem__	only if you have heterogeneous ASTs
-	#  
 	def __cmp__(self, o):
 		return cmp(self.type, o)
 	
@@ -157,25 +148,25 @@ class GenericScanner(object):
 	
 
 class _State(object):
-	'''#
-	#  Extracted from GenericParser and made global so that [un]picking works.
-	#'''
+	'''
+	Extracted from GenericParser and made global so that [un]picking works.
+	'''
 	def __init__(self, stateno, items):
 		self.T, self.complete, self.items = [], [], items
 		self.stateno = stateno
 	
 
 class GenericParser(object):
-	'''#
-	#  An Earley parser, as per J. Earley, "An Efficient Context-Free
-	#  Parsing Algorithm", CACM 13(2), pp. 94-102.  Also J. C. Earley,
-	#  "An Efficient Context-Free Parsing Algorithm", Ph.D. thesis,
-	#  Carnegie-Mellon University, August 1968.  New formulation of
-	#  the parser according to J. Aycock, "Practical Earley Parsing
-	#  and the SPARK Toolkit", Ph.D. thesis, University of Victoria,
-	#  2001, and J. Aycock and R. N. Horspool, "Practical Earley
-	#  Parsing", unpublished paper, 2001.
-	#'''
+	'''
+	An Earley parser, as per J. Earley, "An Efficient Context-Free
+	Parsing Algorithm", CACM 13(2), pp. 94-102.  Also J. C. Earley,
+	"An Efficient Context-Free Parsing Algorithm", Ph.D. thesis,
+	Carnegie-Mellon University, August 1968.  New formulation of
+	the parser according to J. Aycock, "Practical Earley Parsing
+	and the SPARK Toolkit", Ph.D. thesis, University of Victoria,
+	2001, and J. Aycock and R. N. Horspool, "Practical Earley
+	Parsing", unpublished paper, 2001.
+	'''
 	
 	def __init__(self, start):
 		self.rules = {}
@@ -750,13 +741,13 @@ class GenericParser(object):
 
 
 class GenericASTBuilder(GenericParser):
-	'''#
-	#  GenericASTBuilder automagically constructs a concrete/abstract syntax tree
-	#  for a given input.  The extra argument is a class (not an instance!)
-	#  which supports the "__setslice__" and "__len__" methods.
-	#
-	#  XXX - silently overrides any user code in methods.
-	#'''
+	'''
+	GenericASTBuilder automagically constructs a concrete/abstract syntax tree
+	for a given input.  The extra argument is a class (not an instance!)
+	which supports the "__setslice__" and "__len__" methods.
+	
+	XXX - silently overrides any user code in methods.
+	'''
 	def __init__(self, AST, start):
 		GenericParser.__init__(self, start)
 		self.AST = AST
@@ -791,15 +782,15 @@ class GenericASTTraversalPruningException(Exception):
 	pass
 
 class GenericASTTraversal(object):
-	'''#
-	#  GenericASTTraversal is a Visitor pattern according to Design Patterns.  For
-	#  each node it attempts to invoke the method n_<node type>, falling
-	#  back onto the default() method if the n_* can't be found.  The preorder
-	#  traversal also looks for an exit hook named n_<node type>_exit (no default
-	#  routine is called if it's not found).  To prematurely halt traversal
-	#  of a subtree, call the prune() method -- this only makes sense for a
-	#  preorder traversal.  Node type is determined via the typestring() method.
-	#'''
+	'''
+	GenericASTTraversal is a Visitor pattern according to Design Patterns.  For
+	each node it attempts to invoke the method n_<node type>, falling
+	back onto the default() method if the n_* can't be found.  The preorder
+	traversal also looks for an exit hook named n_<node type>_exit (no default
+	routine is called if it's not found).  To prematurely halt traversal
+	of a subtree, call the prune() method -- this only makes sense for a
+	preorder traversal.  Node type is determined via the typestring() method.
+	'''
 	def __init__(self, ast):
 		self.ast = ast
 	
