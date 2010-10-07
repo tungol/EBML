@@ -18,7 +18,7 @@ class Reference(object):
 		if 'payload' in dir(self):
 			return str(self.payload)
 		else:
-			return "%s bytes at offset %s in file %s" % (self.full_length, 
+			return "%s bytes at offset %s in file %s" % (self.total_length, 
 				self.hexid_offset, self.filename)
 	
 	def __iter__(self):
