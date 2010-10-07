@@ -8,45 +8,24 @@ class EOFError(Exception):
 	pass
 
 class Reference(object):
-	def __init__(self, doctype, filename, offset):
-		self.doctype = doctype
+	def __init__(self, filename, offset):
 		self.filename = filename
 		self.hexid_offset = offset
 	
 	def __repr__(self):
-		return "Reference(%r, %r, %r)" % (self.doctype, self.filename, 
+		return "Reference(%r, %r)" % (self.filename, 
 			self.hexid_offset)
 	
 	def __str__(self):
-		if 'payload' in dir(self):
-			return str(self.payload)
-		else:
-			return "%s bytes at offset %s in file %s" % (self.total_length, 
+		return "%s bytes at offset %s in file %s" % (self.total_length, 
 				self.hexid_offset, self.filename)
 	
-	def __iter__(self):
-		if self.valtype == 'container':
-			return iter(self.payload)
-	
 	def __getattr__(self, name):
-		if name == 'hexid':
-			return self.get_hexid()
-		elif name == 'payload_length':
+		if name == 'payload_length':
 			return self.get_payload_length()
-		elif name == 'name':
-			self.name = self.doctype.lookup(self.hexid).name
-			return self.name
 		elif name == 'end':
 			self.end = self.total_length + self.hexid_offset
 			return self.end
-		elif name == 'payload':
-			return self.get_payload()
-		elif name == 'valtype':
-			self.valtype = self.doctype.lookup(self.hexid).valtype
-			return self.valtype
-		elif name == 'hexid_length':
-			self.hexid_length = len(self.hexid)
-			return self.hexid_length
 		elif name == 'size_offset':
 			self.size_offset = self.hexid_offset + self.hexid_length
 			return self.size_offset
@@ -61,9 +40,7 @@ class Reference(object):
 		else:
 			raise AttributeError
 	
-	def get_hexid(self):
-		if 'hexid' in dir(self):
-			return self.hexid
+	def get_hexid(self, ids):
 		hexid = ''
 		with open(self.filename, 'rb') as file:
 			file.seek(self.hexid_offset)
@@ -74,97 +51,114 @@ class Reference(object):
 				hexid += byte
 				if len(hexid) > 8:
 					raise EOFError('Should have found an id by now: %r') % hexid
-				if hexid in self.doctype.get_ids():
+				if hexid in ids:
 					break
-		self.hexid = hexid
 		self.hexid_length = len(hexid)
-		self.size_offset = self.hexid_offset + self.hexid_length
 		return hexid
 	
 	def get_size_length(self):
 		if 'size_length' in dir(self):
-			return self.G_length
-		bits = []
-		bytecount = 0
-		with open(self.filename, 'rb') as file:
-			file.seek(self.size_offset)
-			while True:
-				byte = file.read(1)
-				if byte == '':
-					raise EOFError('Unexpected EOF.')
-				bytecount += 1
-				bits += self.get_bits(byte)
-				bitcount = 0
-				for bit in bits:
-					bitcount += 1
-					if bit == '1':
-						self.size_length = bitcount
-						return self.size_length		
+			return self.size_length
+		bits = bitstring.Bits(filename=self.filename, offset=self.size_offset*8)
+		bitcount = 0
+		bit = 0
+		while not bit:
+			bit = bits.read(1)
+			if bit == '':
+				raise EOFError('Unexpected EOF.')
+			bitcount += 1
+		self.size_length = bitcount
+		return self.size_length		
 	
 	def get_payload_length(self):
 		if 'payload_length' in dir(self):
 			return self.payload_length
-		with open(self.filename, 'rb') as file:
-			file.seek(self.size_offset)
-			bytes = file.read(self.size_length)
-		bits = self.get_bits(bytes)
-		index = bits.index('1')
+		bits = bitstring.BitString(filename=self.filename, offset=self.size_offset*8,
+			length=self.size_length*8)
+		for pos, bit in enumerate(bits):
+			if bit == 1:
+				index = pos
+				break
 		del bits[:index + 1]
-		bitstring = '0b' + ''.join(bits)
-		payload_length = int(bitstring, 2)
-		self.payload_length = payload_length
+		self.payload_length = bits.uint
 		return self.payload_length
 	
-	def get_bits(self, hexstring):
-		allbits = []
-		for byte in hexstring:
-			b = bin(ord(byte))
-			bits = [x for x in b[2:]]
-			while len(bits) < 8:
-				bits.insert(0, '0')
-			allbits += bits
-		return allbits
+	def get_payload(self, valtype):
+		raw_payload = bitstring.Bits(filename=self.filename, 
+			offset=self.payload_offset*8, length=self.payload_length*8)
+		if valtype == 'uint':
+			payload = raw_payload.uint
+		elif valtype == 'int':
+			payload = raw_payload.int
+		elif valtype == 'float':
+			payload = raw_payload.float
+		elif valtype == 'string':
+			payload = raw_payload.bytes
+		elif valtype == 'date':
+			payload = raw_payload.int
+		elif valtype == 'binary':
+			payload = raw_payload.bytes
+		return payload
 	
-	def get_payload(self):
-		if self.valtype == 'container':
-			self.payload = []
-			offset = self.payload_offset
-			while offset != self.end:
-				if offset > self.end:
-					raise EOFError('Went too far, file is damaged.')
-				reference = Reference(self.doctype, self.filename, offset)
-				offset += reference.total_length
-				self.payload.append(reference)
-		else:
-			raw_payload = bitstring.Bits(filename=self.filename, offset=self.payload_offset*8, 
-				length=self.payload_length*8)
-			if self.valtype == 'uint':
-				self.payload = raw_payload.uint
-			elif self.valtype == 'int':
-				self.payload = raw_payload.int
-			elif self.valtype == 'float':
-				self.payload = raw_payload.float
-			elif self.valtype == 'string':
-				self.payload = raw_payload.bytes
-			elif self.valtype == 'date':
-				self.payload = raw_payload.int
-			elif self.valtype == 'binary':
-				if len(raw_payload) < 8 * 16:
-					self.payload = raw_payload.bytes
-				else:
-					self.payload = 'Large binary object'
-		return self.payload
+	def get_container_payload(self, doctype):
+		payload = []
+		offset = self.payload_offset
+		while offset != self.end:
+			if offset > self.end:
+				raise EOFError('Went too far, file is damaged.')
+			reference = Reference(self.filename, offset)
+			element = Element(doctype, reference)
+			payload.append(element)
+			offset += reference.total_length
+		return payload
 	
 
 class Element(object):
-	def __init__(self, doctype, hexid, payload):
-		self.doctype = doctype
-		self.hexid = hexid
-		self.payload = payload
-		self.name = doctype.lookup(hexid).name
+	def __init__(self, *args):
+		if len(args) == 2:
+			self.doctype = args[0]
+			self.reference = args[1]
+			self.hexid = self.reference.get_hexid(self.doctype.get_ids())
+			if self.valtype != 'container':
+				if self.reference.payload_length < 16:
+					self.set_payload()
+		elif len(args) == 3:
+			self.doctype = args[0]
+			self.hexid = hexid[1]
+			self.payload = payload[2]
+		else:
+			raise SyntaxError
 	
 	def __repr__(self):
-		return 'Element(%r, %r, %r)' % (self.doctype, self.name, self.payload)
+		if 'reference' in dir(self):
+			return 'Element(%r, %r)' % (self.doctype, self.reference)
+		else:
+			return 'Element(%r, %r, %r)' % (self.doctype, self.hexid, self.payload)
+	
+	def __getattr__(self, key):
+		if key == 'name':
+			self.name = self.doctype.lookup(self.hexid).name
+			return self.name
+		elif key == 'payload':
+			self.set_payload()
+			return self.payload
+		elif key == 'valtype':
+			self.valtype = self.doctype.lookup(self.hexid).valtype
+			return self.valtype
+		else:
+			raise AttributeError
+	
+	def __iter__(self):
+		if self.valtype == 'container':
+			return iter(self.payload)
+	
+	def set_payload(self):
+		if self.valtype == 'container':
+			self.payload = self.reference.get_container_payload(self.doctype)
+		else:
+			self.payload = self.reference.get_payload(self.valtype)
+	
+
 
 class EBML(object):
 	def __init__(self, filename, doctype=None):
@@ -178,11 +172,12 @@ class EBML(object):
 	
 	def find_document_type(self):
 		file = open(self.filename, 'rb')
-		first_element = Reference(self.doctype, self.filename, 0)
-		doctype_name = 'DocType'
+		reference = Reference(self.filename, 0)
+		first_element = Element(self.doctype, reference)
+		doctype_element_name = 'DocType'
 		found = False
 		for element in first_element:
-			if element.name == doctype_name:
+			if element.name == doctype_element_name:
 				type_name = element.payload
 				self.doctype = dtd.Doctype(type_name)
 				found = True
@@ -199,13 +194,14 @@ class EBML(object):
 				break
 			elif offset > end:
 				raise EOFError('Went too far, file is damaged.')
-			reference = Reference(self.doctype, self.filename, offset)
-			self.children.append(reference)
+			reference = Reference(self.filename, offset)
+			element = Element(self.doctype, reference)
+			self.children.append(element)
 			offset = reference.end
 	
 
 
-EBML('test.mkv')
-EBML('test2.mkv')
-EBML('test3.mkv')
-EBML('test4.mkv')
+#EBML('test.mkv')
+#EBML('test2.mkv')
+#EBML('test3.mkv')
+#EBML('test4.mkv')
