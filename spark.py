@@ -156,17 +156,17 @@ class GenericScanner(object):
 		raise SyntaxError("Specification error: unmatched input")
 	
 
-#
-#  Extracted from GenericParser and made global so that [un]picking works.
-#
 class _State(object):
+	'''#
+	#  Extracted from GenericParser and made global so that [un]picking works.
+	#'''
 	def __init__(self, stateno, items):
 		self.T, self.complete, self.items = [], [], items
 		self.stateno = stateno
 	
 
 class GenericParser(object):
-	#
+	'''#
 	#  An Earley parser, as per J. Earley, "An Efficient Context-Free
 	#  Parsing Algorithm", CACM 13(2), pp. 94-102.  Also J. C. Earley,
 	#  "An Efficient Context-Free Parsing Algorithm", Ph.D. thesis,
@@ -175,7 +175,7 @@ class GenericParser(object):
 	#  and the SPARK Toolkit", Ph.D. thesis, University of Victoria,
 	#  2001, and J. Aycock and R. N. Horspool, "Practical Earley
 	#  Parsing", unpublished paper, 2001.
-	#
+	#'''
 	
 	def __init__(self, start):
 		self.rules = {}
@@ -748,15 +748,15 @@ class GenericParser(object):
 		return list[0]
 	
 
-#
-#  GenericASTBuilder automagically constructs a concrete/abstract syntax tree
-#  for a given input.  The extra argument is a class (not an instance!)
-#  which supports the "__setslice__" and "__len__" methods.
-#
-#  XXX - silently overrides any user code in methods.
-#
 
 class GenericASTBuilder(GenericParser):
+	'''#
+	#  GenericASTBuilder automagically constructs a concrete/abstract syntax tree
+	#  for a given input.  The extra argument is a class (not an instance!)
+	#  which supports the "__setslice__" and "__len__" methods.
+	#
+	#  XXX - silently overrides any user code in methods.
+	#'''
 	def __init__(self, AST, start):
 		GenericParser.__init__(self, start)
 		self.AST = AST
@@ -786,20 +786,20 @@ class GenericASTBuilder(GenericParser):
 		return rv
 	
 
-#
-#  GenericASTTraversal is a Visitor pattern according to Design Patterns.  For
-#  each node it attempts to invoke the method n_<node type>, falling
-#  back onto the default() method if the n_* can't be found.  The preorder
-#  traversal also looks for an exit hook named n_<node type>_exit (no default
-#  routine is called if it's not found).  To prematurely halt traversal
-#  of a subtree, call the prune() method -- this only makes sense for a
-#  preorder traversal.  Node type is determined via the typestring() method.
-#
 
 class GenericASTTraversalPruningException(Exception):
 	pass
 
 class GenericASTTraversal(object):
+	'''#
+	#  GenericASTTraversal is a Visitor pattern according to Design Patterns.  For
+	#  each node it attempts to invoke the method n_<node type>, falling
+	#  back onto the default() method if the n_* can't be found.  The preorder
+	#  traversal also looks for an exit hook named n_<node type>_exit (no default
+	#  routine is called if it's not found).  To prematurely halt traversal
+	#  of a subtree, call the prune() method -- this only makes sense for a
+	#  preorder traversal.  Node type is determined via the typestring() method.
+	#'''
 	def __init__(self, ast):
 		self.ast = ast
 	
