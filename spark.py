@@ -28,6 +28,8 @@ __license__='''
 
 __version__ = 'SPARK-0.7 (pre-alpha-7) (EBML mod)'
 
+__all__ = ['Token, AST', 'GenericScanner', 'GenericASTBuilder', 'GenericASTTraversal']
+
 import re
 import sys
 import string
@@ -38,14 +40,6 @@ class AST(object):
 		self.type = type
 		self._kids = []
 	
-	#
-	#  Not all these may be needed, depending on which classes you use:
-	#
-	#  __getitem__		GenericASTTraversal, GenericASTMatcher
-	#  __len__		GenericASTBuilder
-	#  __setitem__		GenericASTBuilder
-	#  __cmp__		GenericASTMatcher
-	#
 	def __getitem__(self, i):
 		return self._kids[i]
 	
@@ -60,9 +54,6 @@ class AST(object):
 		else:
 			raise AttributeError
 	
-	def __cmp__(self, o):
-		return cmp(self.type, o)
-	
 	def __repr__(self):
 		return repr((self.type, self._kids))
 	
@@ -75,7 +66,6 @@ class AST(object):
 	def remove(self, child):
 		self._kids.remove(child)
 	
-
 
 class Token(object):
 	def __init__(self, type, attr=None):
@@ -859,60 +849,6 @@ class GenericASTTraversal(object):
 		pass
 	
 
-
-#
-#  GenericASTMatcher.  AST nodes must have "__getitem__" and "__cmp__"
-#  implemented.
-#
-#  XXX - makes assumptions about how GenericParser walks the parse tree.
-#
-
-class GenericASTMatcher(GenericParser):
-	def __init__(self, start, ast):
-		GenericParser.__init__(self, start)
-		self.ast = ast
-	
-	def preprocess(self, rule, func):
-		rebind = lambda func, self=self: \
-				lambda args, func=func, self=self: \
-					self.foundMatch(args, func)
-		lhs, rhs = rule
-		rhslist = list(rhs)
-		rhslist.reverse()
-		
-		return (lhs, tuple(rhslist)), rebind(func)
-	
-	def foundMatch(self, args, func):
-		func(args[-1])
-		return args[-1]
-	
-	def match_r(self, node):
-		self.input.insert(0, node)
-		children = 0
-		
-		for child in node:
-			if children == 0:
-				self.input.insert(0, '(')
-			children = children + 1
-			self.match_r(child)
-			
-		if children > 0:
-			self.input.insert(0, ')')
-	
-	def match(self, ast=None):
-		if ast is None:
-			ast = self.ast
-		self.input = []
-		
-		self.match_r(ast)
-		self.parse(self.input)
-	
-	def resolve(self, list):
-		#
-		#  Resolve ambiguity in favor of the longest RHS.
-		#
-		return list[-1]
-	
 
 def _dump(tokens, sets, states):
 	for i in range(len(sets)):
