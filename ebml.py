@@ -17,7 +17,7 @@ class Reference(object):
 			self.hexid_offset)
 	
 	def __str__(self):
-		return "%s bytes at offset %s in file %s" % (self.total_length, 
+		return "<%s bytes at offset %s in file %s>" % (self.total_length, 
 				self.hexid_offset, self.filename)
 	
 	def __getattr__(self, name):
@@ -135,6 +135,12 @@ class Element(object):
 		else:
 			return 'Element(%r, %r, %r)' % (self.doctype, self.hexid, self.payload)
 	
+	def __str__(self):
+		if 'payload' in dir(self):
+			return '<%s element with value %r>' % (self.name, self.payload)
+		else:
+			return '<%s element, %s>' % (self.name, self.reference)
+	
 	def __getattr__(self, key):
 		if key == 'name':
 			self.name = self.doctype.lookup(self.hexid).name
@@ -169,6 +175,12 @@ class EBML(object):
 			self.doctype = dtd.DoctypeBase()
 			self.find_document_type()
 		self.build_document()
+	
+	def __repr__(self):
+		return 'EBML(%r)' % self.filename
+	
+	def __str__(self):
+		return str(self.children)
 	
 	def find_document_type(self):
 		file = open(self.filename, 'rb')
