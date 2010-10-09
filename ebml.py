@@ -1,8 +1,28 @@
 from __future__ import print_function
+from __future__ import division
 
 import os
 import dtd
 import bitstring
+import math
+
+class ContainerPayload(list):
+	def __init__(self, *args, **kwargs):
+		list.__init__(self, *args, **kwargs)
+	
+	def append(self, item, keep_reference=False):
+		if keep_reference:
+			list.append(self, item)
+		else:
+			item.destroy_reference()
+			list.append(self, item)
+	
+	def __delitem__(self, item):
+		if item.has_reference():
+			item.void()
+		else:
+			list.__delitem__(item)
+	
 
 class EOFError(Exception):
 	pass
@@ -95,17 +115,8 @@ class Reference(object):
 		return self.payload_length
 	
 	def get_payload(self):
-		if valtype == 'container':
-			self.payload = []
-			offset = self.payload_offset
-			while offset != self.end:
-				if offset > self.end:
-					raise EOFError('Went too far, file is damaged.')
-				reference = Reference(self.doctype, self.filename, offset)
-				element = Element(self.doctype, reference)
-				self.payload.append(element)
-				offset += reference.total_length
-			return self.payload
+		if self.valtype == 'container':
+			return self.get_container_payload()
 		raw_payload = bitstring.Bits(filename=self.filename, 
 			offset=self.payload_offset*8, length=self.payload_length*8)
 		if self.valtype == 'uint':
@@ -122,8 +133,66 @@ class Reference(object):
 			self.payload = raw_payload.bytes
 		return self.payload
 	
+	def get_container_payload(self):
+		self.payload = ContainerPayload()
+		offset = self.payload_offset
+		while offset != self.end:
+			if offset > self.end:
+				raise EOFError('Went too far, file is damaged.')
+			reference = Reference(self.doctype, self.filename, offset)
+			element = Element(self.doctype, reference)
+			self.payload.append(element, keep_reference=True)
+			offset += reference.total_length
+		return self.payload[:]
+	
 	def get_delta_size(self, new_payload):
-		new_payload_length = self.
+		if self.valtype == 'container':
+			payload_delta = sum([item.get_delta_size() for item in new_payload])
+			new_payload_length = self.payload_length + payload_delta
+		else:
+			new_payload_length = len(self.get_binary_payload(new_payload))
+			payload_delta = new_payload_length - self.payload_length
+		new_size_length = len(self.convert_size(new_payload_length))
+		size_delta = new_size_length - self.size_length
+		return payload_delta + size_delta
+	
+	def get_binary_payload(self, payload=None):
+		if payload == None:
+			payload = self.payload
+		if self.valtype == 'uint':
+			if payload == 0 and self.payload_length == 0:
+				return bitstring.Bits()
+			minlength = math.ceil(math.log(payload+1, 2)/8)
+			if minlength > self.payload_length:
+				return bitstring.Bits(uint=payload, 
+					length=self.payload_length*8)
+			else:
+				return bitstring.Bits(uint=payload, length=minlength*8)
+		elif self.valtype == 'int':
+			if payload == 0 and self.payload_length == 0:
+				return bitstring.Bits()
+			elif payload < 0:
+				minlength = math.ceil(math.log(math.abs(payload), 2)/8) + 1
+			else:
+				minlength = math.ceil(math.log(payload+1, 2)/8) + 1
+			if minlength > self.payload_length:
+				return bitstring.Bits(int=payload, length=self.payload_length*8)
+			else:
+				return bitstring.Bits(int=payload, length=minlength*8)
+		elif self.valtype == 'float':
+			if payload == 0.0 and self.payload_length == 0:
+				return bitstring.Bits()
+			else:
+				return bitstring.Bits(float=payload, 
+					length=self.payload_length*8)
+		elif self.valtype == 'string':
+			if len(payload) < self.payload_length: #add padding
+				payload += '\x00' * self.payload_length - len(payload)
+			return bitstring.Bits(bytes=payload)
+		elif self.valtype == 'date':
+			return bitstring.Bits(int=payload, length=64)
+		elif self.valtype == 'binary':
+			return bitstring.Bits(bytes=payload)
 	
 
 class Element(object):
@@ -134,7 +203,7 @@ class Element(object):
 			self.hexid = self.reference.get_hexid()
 			if self.valtype != 'container':
 				if self.reference.payload_length < 16:
-					self.set_payload()
+					self.payload = self.reference.get_payload()
 		elif len(args) == 3:
 			self.doctype = args[0]
 			self.hexid = hexid[1]
@@ -173,9 +242,14 @@ class Element(object):
 		if self.valtype == 'container':
 			return iter(self.payload)
 	
-	def writes_pending(self):
+	def has_write_pending(self):
 		if self.has_reference():
 			if self.payload == self.reference.payload:
+				if self.valtype == 'container':
+					for item in self:
+						if item.has_write_pending():
+							return True
+					return False
 				return False
 			return True
 		return True
@@ -187,18 +261,22 @@ class Element(object):
 	
 	def get_delta_size(self):
 		if self.writes_pending():
-			if self.has_reference():
-				self.delta_size = self.reference.get_delta_size(self.payload)
+			if self.valtype == 'container':
+				payload_delta = sum([item.get_delta_size() for item in self])
+				self.delta_size = self.reference.get_delta_size(self.delta_size)
 			else:
-				dummy_reference = Reference(self.doctype)
-				self.delta_size = dummy_reference.get_delta_size(self.payload)
-				self.delta_size += len(self.hexid)
-			return self.delta_size
+				if self.has_reference():
+					self.delta_size = self.reference.get_delta_size(self.payload)
+				else:
+					dummy_reference = Reference(self.doctype)
+					self.delta_size = dummy_reference.get_delta_size(self.payload)
+					self.delta_size += len(self.hexid)
+				return self.delta_size
 		return 0
 	
 	def write(starting_shift=0, max_shift=1024, commit=False, upcoming=None):
 		if self.valtype == 'container':
-			results = []
+			results = ContainerPayload()
 			for index, child in enumerate(self.payload):
 				if index + 1 == len(self.payload):
 					next = None
@@ -208,11 +286,12 @@ class Element(object):
 					result = child.write(shift, max_shift, commit, next)
 				else:
 					result = child.reference.write(shift, max_shift, commit, next)
-				results.append(result)
+				results.append(result, keep_reference=True)
 				shift += result.shift_delta
 			
 		else:
 			pass
+	
 
 
 class EBML(object):
@@ -247,7 +326,7 @@ class EBML(object):
 			raise SyntaxError("Didn't find a document type declaration.")
 	
 	def build_document(self):
-		self.children = []
+		self.children = ContainerPayload()
 		offset = 0
 		end = os.stat(self.filename).st_size
 		while True:
@@ -257,16 +336,16 @@ class EBML(object):
 				raise EOFError('Went too far, file is damaged.')
 			reference = Reference(self.doctype, self.filename, offset)
 			element = Element(self.doctype, reference)
-			self.children.append(element)
+			self.children.append(element, keep_reference=True)
 			offset = reference.end
 	
 	def write(self):
 		for item in self.children:
-			
+			pass
 	
 
 
-#EBML('test.mkv')
-#EBML('test2.mkv')
-#EBML('test3.mkv')
-#EBML('test4.mkv')
+EBML('test.mkv')
+EBML('test2.mkv')
+EBML('test3.mkv')
+EBML('test4.mkv')
