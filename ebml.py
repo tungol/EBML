@@ -290,33 +290,47 @@ class Element(object):
 	
 	def write(starting_shift=0, max_shift=1024, commit=None, upcoming=None):
 		if self.valtype == 'container':
-			results = ContainerPayload()
-			for index, child in enumerate(self.payload):
-				if index + 1 == len(self.payload):
-					next = None
-				else:
-					next = self.payload(index + 1)
-				result = child.write(shift, max_shift, commit, next)
-				results.append(result, keep_reference=True)
-				shift += result.shift_delta
-		else:
-			delta = self.get_delta_size()
-			end_shift = delta + starting_shift
-			if upcoming.name == 'Void': # can't have a void of length 1
-				if upcoming.total_length - 2 >= end_shift:
-					space_needed = 0
-				elif upcoming.total_length == end_shift:
-					space_needed = 0
-				else:
-					space_needed = end_shift - (upcoming.payload_length - 2)
-				void_adjust = end_shift - space_needed
+		    return self.write_container(starting_shift, max_shift, commit, upcoming)
+		delta = self.get_delta_size()
+		end_shift = delta + starting_shift
+		if upcoming.name == 'Void': # can't have a void of length 1
+			if upcoming.total_length - 2 >= end_shift:
+				space_needed = 0
+			elif upcoming.total_length == end_shift:
+				space_needed = 0
 			else:
-				space_needed = end_shift
-			if commit != None:
-				if commit == space_needed:
-					if upcoming.name == 'Void':
-						upcoming.adjust_void(void_adjust)
-					
+				space_needed = end_shift - (upcoming.payload_length - 2)
+			void_adjust = end_shift - space_needed
+		else:
+			space_needed = end_shift
+		if starting_shift:
+		    amount_shifted = self.total_size
+		    if amount_shifted > max_shift:
+		        raise WriteError('Amount to be shifted exceeds limits, failing.')
+		else:
+		    amount_shifted = 0
+		if commit != None:
+			if commit == space_needed:
+				if upcoming.name == 'Void':
+					upcoming.adjust_void(void_adjust)
+				self.write_to_file()
+				return
+		    raise WriteError('Incorrect values passed. Write failed on element %s.' % self)
+	    return (space_needed, amount_shifted, self.total_size + delta)
+	
+	def write_container(starting_shift=0, max_shift=1024, commit=None, upcoming=None):
+	    results = []
+	    shift = starting_shift
+		for index, child in enumerate(self.payload):
+			if index + 1 == len(self.payload):
+				next = None
+			else:
+				next = self.payload(index + 1)
+			result = child.write(shift, max_shift, commit, next)
+			results.append(result)
+			shift = result[0]
+		new_payload_length = sum([result[2] for result in results])
+	    
 	
 
 
