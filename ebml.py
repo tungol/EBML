@@ -154,13 +154,13 @@ class Reference(object):
 			payload_delta = sum([item.get_delta_size() for item in new_payload])
 			new_payload_length = self.payload_length + payload_delta
 		else:
-			new_payload_length = len(self.get_binary_payload(new_payload))
+			new_payload_length = len(self.encode_payload(new_payload))
 			payload_delta = new_payload_length - self.payload_length
-		new_size_length = len(self.encode_size(new_payload_length))
+		new_size_length = len(self.encode_payload_length(new_payload_length))
 		size_delta = new_size_length - self.size_length
 		return payload_delta + size_delta
 	
-	def get_binary_payload(self, payload=None):
+	def encode_payload(self, payload=None):
 		if payload == None:
 			payload = self.payload
 		if self.valtype == 'uint':
@@ -198,7 +198,7 @@ class Reference(object):
 		elif self.valtype == 'binary':
 			return bitstring.Bits(bytes=payload)
 	
-	def encode_size(self, value):
+	def encode_payload_length(self, value):
 		minlength = int(math.ceil(math.log(value+1, 2)))
 		length = int(math.ceil(minlength/7))
 		bytelength = max((length, self.size_length))
@@ -288,7 +288,7 @@ class Element(object):
 			return self.delta_size
 		return 0
 	
-	def write(starting_shift=0, max_shift=1024, commit=False, upcoming=None):
+	def write(starting_shift=0, max_shift=1024, commit=None, upcoming=None):
 		if self.valtype == 'container':
 			results = ContainerPayload()
 			for index, child in enumerate(self.payload):
@@ -296,15 +296,27 @@ class Element(object):
 					next = None
 				else:
 					next = self.payload(index + 1)
-				if child.valtype == 'container':
-					result = child.write(shift, max_shift, commit, next)
-				else:
-					result = child.reference.write(shift, max_shift, commit, next)
+				result = child.write(shift, max_shift, commit, next)
 				results.append(result, keep_reference=True)
 				shift += result.shift_delta
-			
 		else:
-			pass
+			delta = self.get_delta_size()
+			end_shift = delta + starting_shift
+			if upcoming.name == 'Void': # can't have a void of length 1
+				if upcoming.total_length - 2 >= end_shift:
+					space_needed = 0
+				elif upcoming.total_length == end_shift:
+					space_needed = 0
+				else:
+					space_needed = end_shift - (upcoming.payload_length - 2)
+				void_adjust = end_shift - space_needed
+			else:
+				space_needed = end_shift
+			if commit != None:
+				if commit == space_needed:
+					if upcoming.name == 'Void':
+						upcoming.adjust_void(void_adjust)
+					
 	
 
 
@@ -354,8 +366,8 @@ class EBML(object):
 			offset = reference.end
 	
 	def write(self):
-		for item in self.children:
-			pass
+		size_deltas = [child.get_delta_size() for child in self.payload]
+		
 	
 
 
