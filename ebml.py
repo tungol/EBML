@@ -28,12 +28,14 @@ class EOFError(Exception):
 	pass
 
 class Reference(object):
-	def __init__(self, doctype, filename=None, offset=None):
+	def __init__(self, doctype=None, filename=None, offset=None, **kwargs):
 		self.doctype = doctype
 		self.filename = filename
 		self.hexid_offset = offset
-		if filename == offset == None:
+		self.dummy = False
+		if doctype == filename == offset == None:
 			self.dummy = True
+			self.valtype = kwargs['valtype']
 	
 	def __repr__(self):
 		return "Reference(%r, %r, %r)" % (self.doctype, self.filename, 
@@ -45,6 +47,8 @@ class Reference(object):
 	
 	def __getattr__(self, name):
 		if name == 'payload_length':
+			if self.dummy:
+				return 0
 			return self.get_payload_length()
 		elif name == 'end':
 			self.end = self.total_length + self.hexid_offset
@@ -104,13 +108,13 @@ class Reference(object):
 	def get_payload_length(self):
 		if 'payload_length' in dir(self):
 			return self.payload_length
-		bits = bitstring.BitString(filename=self.filename, offset=self.size_offset*8,
+		bits = bitstring.Bits(filename=self.filename, offset=self.size_offset*8,
 			length=self.size_length*8)
 		for pos, bit in enumerate(bits):
 			if bit == 1:
 				index = pos
 				break
-		del bits[:index + 1]
+		bits = bits[index + 1:]
 		self.payload_length = bits.uint
 		return self.payload_length
 	
@@ -152,7 +156,7 @@ class Reference(object):
 		else:
 			new_payload_length = len(self.get_binary_payload(new_payload))
 			payload_delta = new_payload_length - self.payload_length
-		new_size_length = len(self.convert_size(new_payload_length))
+		new_size_length = len(self.encode_size(new_payload_length))
 		size_delta = new_size_length - self.size_length
 		return payload_delta + size_delta
 	
@@ -162,8 +166,8 @@ class Reference(object):
 		if self.valtype == 'uint':
 			if payload == 0 and self.payload_length == 0:
 				return bitstring.Bits()
-			minlength = math.ceil(math.log(payload+1, 2)/8)
-			if minlength > self.payload_length:
+			minlength = int(math.ceil(math.log(payload+1, 2)/8))
+			if minlength < self.payload_length:
 				return bitstring.Bits(uint=payload, 
 					length=self.payload_length*8)
 			else:
@@ -172,10 +176,10 @@ class Reference(object):
 			if payload == 0 and self.payload_length == 0:
 				return bitstring.Bits()
 			elif payload < 0:
-				minlength = math.ceil(math.log(math.abs(payload), 2)/8) + 1
+				minlength = int(math.ceil(math.log(math.abs(payload), 2)/8) + 1)
 			else:
-				minlength = math.ceil(math.log(payload+1, 2)/8) + 1
-			if minlength > self.payload_length:
+				minlength = int(math.ceil(math.log(payload+1, 2)/8) + 1)
+			if minlength < self.payload_length:
 				return bitstring.Bits(int=payload, length=self.payload_length*8)
 			else:
 				return bitstring.Bits(int=payload, length=minlength*8)
@@ -193,6 +197,16 @@ class Reference(object):
 			return bitstring.Bits(int=payload, length=64)
 		elif self.valtype == 'binary':
 			return bitstring.Bits(bytes=payload)
+	
+	def encode_size(self, value):
+		minlength = int(math.ceil(math.log(value+1, 2)))
+		length = int(math.ceil(minlength/7))
+		bytelength = max((length, self.size_length))
+		padding_amount = (((bytelength * 8) - minlength) - bytelength)
+		tmp_str = ('0' * (bytelength-1)) + '1' + ('0' * padding_amount)
+		number = bitstring.Bits(uint=value, length=minlength)
+		width = bitstring.Bits(bin=tmp_str)
+		return width + number
 	
 
 class Element(object):
@@ -235,6 +249,11 @@ class Element(object):
 		elif key == 'valtype':
 			self.valtype = self.doctype.lookup(self.hexid).valtype
 			return self.valtype
+		elif key == 'dummy_reference':
+			self.dummy_reference = Reference(valtype=self.valtype)
+			return self.dummy_reference
+		elif key == 'reference':
+			return self.dummy_reference
 		else:
 			raise AttributeError
 	
@@ -260,18 +279,13 @@ class Element(object):
 		return False
 	
 	def get_delta_size(self):
+		# this works because self.reference returns a dummy reference if 
+		# it's not set.
 		if self.writes_pending():
-			if self.valtype == 'container':
-				payload_delta = sum([item.get_delta_size() for item in self])
-				self.delta_size = self.reference.get_delta_size(self.delta_size)
-			else:
-				if self.has_reference():
-					self.delta_size = self.reference.get_delta_size(self.payload)
-				else:
-					dummy_reference = Reference(self.doctype)
-					self.delta_size = dummy_reference.get_delta_size(self.payload)
-					self.delta_size += len(self.hexid)
-				return self.delta_size
+			self.delta_size = self.reference.get_delta_size(self.payload)
+			if not self.has_reference():
+				self.delta_size += len(self.hexid)
+			return self.delta_size
 		return 0
 	
 	def write(starting_shift=0, max_shift=1024, commit=False, upcoming=None):
