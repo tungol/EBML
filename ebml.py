@@ -149,16 +149,16 @@ class Reference(object):
 			offset += reference.total_length
 		return self.payload[:]
 	
-	def get_delta_size(self, new_payload):
-		if self.valtype == 'container':
-			payload_delta = sum([item.get_delta_size() for item in new_payload])
-			new_payload_length = self.payload_length + payload_delta
-		else:
-			new_payload_length = len(self.encode_payload(new_payload))
-			payload_delta = new_payload_length - self.payload_length
-		new_size_length = len(self.encode_payload_length(new_payload_length))
-		size_delta = new_size_length - self.size_length
-		return payload_delta + size_delta
+	def get_length_delta(self, new_payload):
+		new_payload_length = len(self.encode_payload(new_payload))
+		payload_length_delta = new_payload_length - self.payload_length
+		size_length_delta = self.get_size_length_delta(new_payload_length)
+		return payload_length_delta + size_length_delta
+	
+	def get_size_length_delta(self, value):
+		new_length = len(self.encode_payload_length(value))
+		size_length_delta = new_size_length - self.size_length
+		return size_Length_delta
 	
 	def encode_payload(self, payload=None):
 		if payload == None:
@@ -207,6 +207,75 @@ class Reference(object):
 		number = bitstring.Bits(uint=value, length=minlength)
 		width = bitstring.Bits(bin=tmp_str)
 		return width + number
+	
+	def write(self, new_payload, starting_shift=0, max_shift=1024, commit=None, upcoming=None):
+		if self.valtype == 'container':
+			return self.write_container(new_payload, starting_shift, max_shift, commit, upcoming)
+		legnth_delta = self.get_length_delta(new_payload)
+		end_shift = length_delta + starting_shift
+		space_needed, void_adjust = self.handle_upcoming(upcoming, end_shift)
+		if starting_shift:
+			amount_shifted = self.total_length + length_delta
+		else:
+			amount_shifted = 0
+		if amount_shifted > max_shift:
+			raise WriteError('Amount to be shifted exceeds limits, failing.')		
+		if commit != None:
+			if commit == space_needed:
+				if upcoming.name == 'Void':
+					upcoming.adjust_void(void_adjust)
+				self.write_to_file(new_payload)
+				return ('okay', 0, amount_shifted, self.total_length)
+			raise WriteError('Incorrect values passed. Write failed on element %s.' % self)
+		return ('pending', space_needed, amount_shifted, self.total_length + length_delta)
+	
+	def handle_upcoming(self, upcoming, end_shift):
+		if upcoming.name == 'Void': # can't have a void of length 1
+			if upcoming.total_length - 2 >= end_shift:
+				space_needed = 0
+			elif upcoming.total_length == end_shift:
+				space_needed = 0
+			else:
+				space_needed = end_shift - (upcoming.payload_length - 2)
+			void_adjust = end_shift - space_needed
+		else:
+			space_needed = end_shift
+		return space_needed, void_adjust
+	
+	def write_container(self, starting_shift=0, max_shift=1024, commit=None, upcoming=None):
+		child_results = []
+		shift = starting_shift
+		for index, child in enumerate(self.payload):
+			if index + 1 == len(self.payload):
+				next = None
+			else:
+				next = self.payload(index + 1)
+			result = child.write(shift, max_shift, commit, next)
+			child_results.append(result)
+			shift = result[0]
+		new_payload_length = sum([result[3] for result in child_results])
+		payload_length_delta = new_payload_length - self.payload_length
+		size_length_delta = self.get_size_length_delta(new_payload_length)
+		length_delta = payload_length_delta + size_length_delta
+		if not self.has_reference():
+			length_delta += len(self.hexid)
+		end_shift = length_delta + starting_shift
+		space_needed, void_adjust = self.handle_upcoming(upcoming, end_shift)
+		if starting_shift:
+			amount_shifted = self.total_length + length_delta
+		else:
+			amount_shifted = sum([result[2] for result in child_results])
+		if amount_shifted > max_shift:
+			raise WriteError('Amount to be shifted exceeds limits, failing.')
+		if commit != None:
+			if commit == space_needed:
+				if upcoming.name == 'Void':
+					upcoming.adjust_void(void_adjust)
+				
+				self.write_to_file(new_payload)
+				return ('okay', 0, amount_shifted, self.total_length)
+			raise WriteError('Incorrect values passed. Write failed on element %s.' % self)
+		return ('pending', space_needed, amount_shifted, self.total_length + length_delta)
 	
 
 class Element(object):
@@ -278,59 +347,28 @@ class Element(object):
 			return True
 		return False
 	
-	def get_delta_size(self):
+	def get_length_delta(self):
 		# this works because self.reference returns a dummy reference if 
 		# it's not set.
 		if self.writes_pending():
-			self.delta_size = self.reference.get_delta_size(self.payload)
+			self.length_delta = self.reference.get_length_delta(self.payload)
 			if not self.has_reference():
-				self.delta_size += len(self.hexid)
-			return self.delta_size
+				self.length_delta += len(self.hexid)
+			return self.length_delta
 		return 0
 	
-	def write(starting_shift=0, max_shift=1024, commit=None, upcoming=None):
-		if self.valtype == 'container':
-		    return self.write_container(starting_shift, max_shift, commit, upcoming)
-		delta = self.get_delta_size()
-		end_shift = delta + starting_shift
-		if upcoming.name == 'Void': # can't have a void of length 1
-			if upcoming.total_length - 2 >= end_shift:
-				space_needed = 0
-			elif upcoming.total_length == end_shift:
-				space_needed = 0
-			else:
-				space_needed = end_shift - (upcoming.payload_length - 2)
-			void_adjust = end_shift - space_needed
+	def write(self, starting_shift=0, max_shift=1024, commit=None, upcoming=None):
+		if self.writes_pending() or starting_shift:
+			reference = self.reference # to get a dummy reference if needed
+			result = reference.write(self.payload, starting_shift, max_shift, 
+				commit, upcoming)
+			if result[0] == 'okay':
+				# if a write occured on a dummy reference, it's now a real
+				# reference and we need to be sure to save it.
+				self.reference = reference
 		else:
-			space_needed = end_shift
-		if starting_shift:
-		    amount_shifted = self.total_size
-		    if amount_shifted > max_shift:
-		        raise WriteError('Amount to be shifted exceeds limits, failing.')
-		else:
-		    amount_shifted = 0
-		if commit != None:
-			if commit == space_needed:
-				if upcoming.name == 'Void':
-					upcoming.adjust_void(void_adjust)
-				self.write_to_file()
-				return
-		    raise WriteError('Incorrect values passed. Write failed on element %s.' % self)
-	    return (space_needed, amount_shifted, self.total_size + delta)
-	
-	def write_container(starting_shift=0, max_shift=1024, commit=None, upcoming=None):
-	    results = []
-	    shift = starting_shift
-		for index, child in enumerate(self.payload):
-			if index + 1 == len(self.payload):
-				next = None
-			else:
-				next = self.payload(index + 1)
-			result = child.write(shift, max_shift, commit, next)
-			results.append(result)
-			shift = result[0]
-		new_payload_length = sum([result[2] for result in results])
-	    
+			result = ('unneeded', 0, 0, self.total_length)
+		return result
 	
 
 
@@ -380,7 +418,7 @@ class EBML(object):
 			offset = reference.end
 	
 	def write(self):
-		size_deltas = [child.get_delta_size() for child in self.payload]
+		length_deltas = [child.get_length_delta() for child in self.payload]
 		
 	
 
@@ -389,3 +427,4 @@ EBML('test.mkv')
 EBML('test2.mkv')
 EBML('test3.mkv')
 EBML('test4.mkv')
+
