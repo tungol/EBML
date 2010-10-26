@@ -997,7 +997,7 @@ class CleanAST(spark.GenericASTTraversal):
 						node.remove(kids[9]) # '}'
 			else: # node 4 was a '{'
 				# node 5 is an elementlist
-				node.remove(kids[6])
+				node.remove(kids[6]) # '}'
 	
 	def n_property(self, node):
 		kids = node.get_children()
