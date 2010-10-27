@@ -198,13 +198,13 @@ class Reference(object):
 		elif self.valtype == 'binary':
 			return bitstring.Bits(bytes=payload)
 	
-	def encode_payload_length(self, value):
-		minlength = int(math.ceil(math.log(value+1, 2)))
+	def encode_payload_length(self, payload_length):
+		minlength = int(math.ceil(math.log(payload_length+1, 2)))
 		length = int(math.ceil(minlength/7))
 		bytelength = max((length, self.size_length))
 		padding_amount = (((bytelength * 8) - minlength) - bytelength)
 		tmp_str = ('0' * (bytelength-1)) + '1' + ('0' * padding_amount)
-		number = bitstring.Bits(uint=value, length=minlength)
+		number = bitstring.Bits(uint=payload_length, length=minlength)
 		width = bitstring.Bits(bin=tmp_str)
 		return width + number
 	
@@ -213,40 +213,75 @@ class Reference(object):
 			return self.write_container(new_payload, starting_shift, commit)
 		if self.name == 'Void':
 		    return self.write_void(starting_shift, commit)
-		legnth_delta = self.get_length_delta(new_payload)
-		end_shift = length_delta + starting_shift
-		if commit:
-			self.write_to_file(new_payload)
-			return ('okay', 0, self.total_length)
-		return ('pending', end_shift, self.total_length + length_delta)
-	
-	def write_void(self, starting_shift, commit):
-	    # can't have a void of length 1
-		if self.total_length - 2 >= starting_shift:
-			adjust = starting_shift
-		elif self.total_length == starting_shift:
-			adjust = starting_shift
-		else:
-			adjust = self.payload_length - 2
-		void_adjust = end_shift - space_needed
-	
-	def write_container(self, new_payload, starting_shift=0, commit=True):
-		child_results = []
-		shift = starting_shift
-		for index, child in enumerate(self.payload):
-			result = child.write(shift, False)
-			child_results.append(result)
-			shift = result[1]
-		new_payload_length = sum([result[2] for result in child_results])
-		payload_length_delta = new_payload_length - self.payload_length
-		size_length_delta = self.get_size_length_delta(new_payload_length)
+		encoded_payload = self.encode_payload(new_payload)
+		payload_length = len(encoded_payload.bytes)
+		encoded_payload_length = self.encode_payload_length(payload_length)
+		payload_length_delta = payload_length - self.payload_length
+		size_length_delta = len(encoded_payload_length.bytes) - self.size_length
 		length_delta = payload_length_delta + size_length_delta
 		if not self.has_reference():
 			length_delta += len(self.hexid)
 		end_shift = length_delta + starting_shift
 		if commit:
-		    self.write_to_file(new_payload)
-			return ('okay', 0, self.total_length)
+		    with open(self.filename, 'rb+') as file:
+		        file.seek(self.offset + starting_shift)
+		        file.write(self.hexid.bytes)
+		        file.write(encoded_payload_length.bytes)
+		        file.write(encoded_payload.bytes)
+		    self.total_length += length_delta
+			return ('okay', end_shift, self.total_length)
+		return ('pending', end_shift, self.total_length + length_delta)
+	
+	def write_void(self, starting_shift, commit):
+	    remove_self = False
+		if self.total_length - 2 >= starting_shift:
+			length_delta = -starting_shift # shrink by the starting_shift
+		elif self.total_length - 1 == starting_shift:
+		    length_delta = self.total_length - 2 # can't have a void of length 1
+		else: # void is equal to or smaller than shift
+		    remove_self = True # dissapear entirely
+			length_delta = -self.total_length
+		end_shift = length_delta + starting_shift
+		if commit:
+		    if not remove_self:
+		        encoded_payload = 
+    		    # write void of length self.total_length + length_delta
+    		    with open(self.filename, 'rb+') as file:
+    		        file.seek(self.offset + starting_shift)
+    		        file.write(self.hexid.bytes)
+    		        file.write(encoded_payload_length.bytes)
+    		        file.write(encoded_payload.bytes)
+	        self.total_length += length_delta
+		    return ('okay', end_shift, self.total_length)
+		return ('pending', end_shift, self.total_length + length_delta)
+	
+	def write_container(self, new_payload, starting_shift=0, commit=True):
+		child_results = []
+		shift = starting_shift
+		for child in new_payload:
+			result = child.write(shift, False)
+			child_results.append(result)
+			shift = result[1]
+		payload_length = sum([result[2] for result in child_results])
+		encoded_payload_length = self.encode_payload_length(payload_length)
+		payload_length_delta = new_payload_length - self.payload_length
+		size_length_delta = len(encoded_payload_length.bytes) - self.size_length
+		length_delta = payload_length_delta + size_length_delta
+		if not self.has_reference():
+			length_delta += len(self.hexid)
+		end_shift = length_delta + starting_shift
+		if commit:
+		    with open(self.filename, 'rb+') as file:
+		        file.seek(self.offset + starting_shift)
+		        file.write(self.hexid.bytes)
+		        file.write(encoded_payload_length.bytes)
+    		child_results = []
+    		shift = starting_shift
+    		for child in new_payload:
+    			result = child.write(shift)
+    			shift = result[1]
+		    self.total_length += length_delta
+			return ('okay', end_shift, self.total_length)
 		return ('pending', end_shift, self.total_length + length_delta)
 	
 
@@ -329,16 +364,16 @@ class Element(object):
 			return self.length_delta
 		return 0
 	
-	def write(self, starting_shift=0, upcoming=None):
+	def write(self, starting_shift=0, commit=True):
 		if self.writes_pending() or starting_shift:
 			reference = self.reference # to get a dummy reference if needed
-			result = reference.write(self.payload, starting_shift, upcoming)
+			result = reference.write(self.payload, starting_shift, commit)
 			if result[0] == 'okay':
 				# if a write occured on a dummy reference, it's now a real
 				# reference and we need to be sure to save it.
 				self.reference = reference
 		else:
-			result = ('unneeded', 0, 0, self.total_length)
+			result = ('unneeded', 0, self.total_length)
 		return result
 	
 
