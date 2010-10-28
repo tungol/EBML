@@ -149,17 +149,6 @@ class Reference(object):
 			offset += reference.total_length
 		return self.payload[:]
 	
-	def get_length_delta(self, new_payload):
-		new_payload_length = len(self.encode_payload(new_payload))
-		payload_length_delta = new_payload_length - self.payload_length
-		size_length_delta = self.get_size_length_delta(new_payload_length)
-		return payload_length_delta + size_length_delta
-	
-	def get_size_length_delta(self, value):
-		new_length = len(self.encode_payload_length(value))
-		size_length_delta = new_size_length - self.size_length
-		return size_Length_delta
-	
 	def encode_payload(self, payload=None):
 		if payload == None:
 			payload = self.payload
@@ -244,7 +233,13 @@ class Reference(object):
 		end_shift = length_delta + starting_shift
 		if commit:
 		    if not remove_self:
-		        encoded_payload = 
+		        total_length = self.total_length + self.length_delta
+		        size_length = int(math.ceil(math.log(total_length+1, 2)))
+		        size_length_delta = self.size_length - size_length
+		        payload_length_delta = length_delta - size_length_delta
+		        payload_length = self.payload_length + payload_length_delta
+		        encoded_payload_length = self.encode_payload_length(payload_length)
+		        encoded_payload = '\x00' * encoded_payload_length
     		    # write void of length self.total_length + length_delta
     		    with open(self.filename, 'rb+') as file:
     		        file.seek(self.offset + starting_shift)
@@ -354,16 +349,6 @@ class Element(object):
 			return True
 		return False
 	
-	def get_length_delta(self):
-		# this works because self.reference returns a dummy reference if 
-		# it's not set.
-		if self.writes_pending():
-			self.length_delta = self.reference.get_length_delta(self.payload)
-			if not self.has_reference():
-				self.length_delta += len(self.hexid)
-			return self.length_delta
-		return 0
-	
 	def write(self, starting_shift=0, commit=True):
 		if self.writes_pending() or starting_shift:
 			reference = self.reference # to get a dummy reference if needed
@@ -424,8 +409,7 @@ class EBML(object):
 			offset = reference.end
 	
 	def write(self):
-		length_deltas = [child.get_length_delta() for child in self.payload]
-		
+		pass
 	
 
 
