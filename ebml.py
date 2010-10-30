@@ -33,9 +33,9 @@ class Reference(object):
 		self.filename = filename
 		self.hexid_offset = offset
 		self.dummy = False
-		if doctype == filename == offset == None:
+		if filename == offset == None:
 			self.dummy = True
-			self.valtype = kwargs['valtype']
+			self.hexid = kwargs['hexid']
 	
 	def __repr__(self):
 		return "Reference(%r, %r, %r)" % (self.doctype, self.filename, 
@@ -46,6 +46,9 @@ class Reference(object):
 				self.hexid_offset, self.filename)
 	
 	def __getattr__(self, name):
+	    if key == 'name':
+			self.name = self.doctype.lookup(self.hexid).name
+			return self.name
 		if name == 'payload_length':
 			if self.dummy:
 				return 0
@@ -197,87 +200,89 @@ class Reference(object):
 		width = bitstring.Bits(bin=tmp_str)
 		return width + number
 	
-	def write(self, new_payload, starting_shift=0, commit=True):
-		if self.valtype == 'container':
-			return self.write_container(new_payload, starting_shift, commit)
-		if self.name == 'Void':
-		    return self.write_void(starting_shift, commit)
-		encoded_payload = self.encode_payload(new_payload)
-		payload_length = len(encoded_payload.bytes)
-		encoded_payload_length = self.encode_payload_length(payload_length)
-		payload_length_delta = payload_length - self.payload_length
-		size_length_delta = len(encoded_payload_length.bytes) - self.size_length
-		length_delta = payload_length_delta + size_length_delta
-		if not self.has_reference():
-			length_delta += len(self.hexid)
-		end_shift = length_delta + starting_shift
+	def write(self, new_payload, new_offset=0, commit=True. filename=None):
+		return_tuple = self.process_payload(new_payload, new_offset)
+		processed_payload = return_tuple[1]
+		encoded_payload_length = return_tuple[2]
+		length_delta = return_tuple[3]
+		end_offset = new_offset + self.total_length + length_delta
 		if commit:
-		    with open(self.filename, 'rb+') as file:
-		        file.seek(self.offset + starting_shift)
-		        file.write(self.hexid.bytes)
-		        file.write(encoded_payload_length.bytes)
-		        file.write(encoded_payload.bytes)
+		    if encoded_payload_length != bitstring.Bits(): # check for removal
+    		    self.write_to_file(processed_payload, encoded_payload_length, 
+    		        new_offset)
 		    self.total_length += length_delta
 			return ('okay', end_shift, self.total_length)
 		return ('pending', end_shift, self.total_length + length_delta)
 	
-	def write_void(self, starting_shift, commit):
-	    remove_self = False
-		if self.total_length - 2 >= starting_shift:
-			length_delta = -starting_shift # shrink by the starting_shift
-		elif self.total_length - 1 == starting_shift:
+	def process_payload(self, input_payload, new_offset):
+	    if self.name == 'Void':
+	        return self.process_void(input_payload, new_offset)
+    	else:
+    	    return = self.process_normal(input_payload, new_offset)
+    
+    def process_void(self, input_payload, new_offset):
+        if self.dummy:
+            return self.process_normal(input_payload, new_offset)
+        remove_self = False
+        offset_delta = new_offset - self.offset
+		if self.total_length - 2 >= offset_delta:
+			length_delta = -offset_delta # shrink by the offset_delta
+		elif self.total_length - 1 == offset_delta:
 		    length_delta = self.total_length - 2 # can't have a void of length 1
 		else: # void is equal to or smaller than shift
 		    remove_self = True # dissapear entirely
 			length_delta = -self.total_length
-		end_shift = length_delta + starting_shift
-		if commit:
-		    if not remove_self:
-		        total_length = self.total_length + self.length_delta
-		        size_length = int(math.ceil(math.log(total_length+1, 2)))
-		        size_length_delta = self.size_length - size_length
-		        payload_length_delta = length_delta - size_length_delta
-		        payload_length = self.payload_length + payload_length_delta
-		        encoded_payload_length = self.encode_payload_length(payload_length)
-		        encoded_payload = '\x00' * encoded_payload_length
-    		    # write void of length self.total_length + length_delta
-    		    with open(self.filename, 'rb+') as file:
-    		        file.seek(self.offset + starting_shift)
-    		        file.write(self.hexid.bytes)
-    		        file.write(encoded_payload_length.bytes)
-    		        file.write(encoded_payload.bytes)
-	        self.total_length += length_delta
-		    return ('okay', end_shift, self.total_length)
-		return ('pending', end_shift, self.total_length + length_delta)
+		if not remove_self:
+	        total_length = self.total_length + self.length_delta
+	        size_length = int(math.ceil(math.log(total_length+1, 2)))
+	        size_length_delta = self.size_length - size_length
+	        payload_length_delta = length_delta - size_length_delta
+	        payload_length = self.payload_length + payload_length_delta
+	        encoded_payload_length = self.encode_payload_length(payload_length)
+	        output_payload = bitstring.Bits(bytes='\x00' * encoded_payload_length)
+	    else:
+	        output_payload = bitstring.Bits()
+	        encoded_payload_length = bitstring.Bits()
+    	return (output_payload, encoded_payload_length, length_delta)
 	
-	def write_container(self, new_payload, starting_shift=0, commit=True):
-		child_results = []
-		shift = starting_shift
-		for child in new_payload:
-			result = child.write(shift, False)
-			child_results.append(result)
-			shift = result[1]
-		payload_length = sum([result[2] for result in child_results])
+	def process_normal(self, input_payload, new_offset):
+	    if self.valtype == 'container':
+	        output_payload = input_payload
+	        child_results = []
+    		shift = new_offset
+    		for child in new_payload:
+    			result = child.write(shift, False)
+    			child_results.append(result)
+    			shift = result[1]
+    		payload_length = sum([result[2] for result in child_results])
+    	else:
+    	    output_payload = self.encode_payload(new_payload)
+    		payload_length = len(output_payload.bytes)
 		encoded_payload_length = self.encode_payload_length(payload_length)
 		payload_length_delta = new_payload_length - self.payload_length
 		size_length_delta = len(encoded_payload_length.bytes) - self.size_length
 		length_delta = payload_length_delta + size_length_delta
 		if not self.has_reference():
 			length_delta += len(self.hexid)
-		end_shift = length_delta + starting_shift
-		if commit:
+		return (output_payload, encoded_payload_length, length_delta)
+    
+    def write_to_file(self, payload, payload_length, offset):
+		if self.valtype == 'container':
 		    with open(self.filename, 'rb+') as file:
-		        file.seek(self.offset + starting_shift)
+		        file.seek(offset)
 		        file.write(self.hexid.bytes)
-		        file.write(encoded_payload_length.bytes)
+		        file.write(payload_length.bytes)
     		child_results = []
-    		shift = starting_shift
-    		for child in new_payload:
+    		shift = offset
+    		for child in payload:
     			result = child.write(shift)
     			shift = result[1]
-		    self.total_length += length_delta
-			return ('okay', end_shift, self.total_length)
-		return ('pending', end_shift, self.total_length + length_delta)
+		else:
+		    with open(self.filename, 'rb+') as file:
+		        file.seek(offset)
+		        file.write(self.hexid.bytes)
+		        file.write(payload_length.bytes)
+		        file.write(payload.bytes)
 	
 
 class Element(object):
@@ -321,7 +326,7 @@ class Element(object):
 			self.valtype = self.doctype.lookup(self.hexid).valtype
 			return self.valtype
 		elif key == 'dummy_reference':
-			self.dummy_reference = Reference(valtype=self.valtype)
+			self.dummy_reference = Reference(self.doctype, hexid=self.hexid)
 			return self.dummy_reference
 		elif key == 'reference':
 			return self.dummy_reference
@@ -332,8 +337,11 @@ class Element(object):
 		if self.valtype == 'container':
 			return iter(self.payload)
 	
-	def has_write_pending(self):
+	def has_write_pending(self, new_offset=None):
 		if self.has_reference():
+		    if new_offset != None:
+		        if new_offset != self.reference.offset:
+		            return True
 			if self.payload == self.reference.payload:
 				if self.valtype == 'container':
 					for item in self:
@@ -349,10 +357,12 @@ class Element(object):
 			return True
 		return False
 	
-	def write(self, starting_shift=0, commit=True):
-		if self.writes_pending() or starting_shift:
+	def write(self, new_offset=0, commit=True, filename=None):
+		if self.writes_pending(new_offset):
+		    if not self.has_reference():
+		        reference = Reference(self.doctype)
 			reference = self.reference # to get a dummy reference if needed
-			result = reference.write(self.payload, starting_shift, commit)
+			result = reference.write(self.payload, new_offset, commit)
 			if result[0] == 'okay':
 				# if a write occured on a dummy reference, it's now a real
 				# reference and we need to be sure to save it.
