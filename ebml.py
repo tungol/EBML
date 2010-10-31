@@ -36,6 +36,9 @@ class Reference(object):
         if filename == offset == None:
             self.dummy = True
             self.hexid = kwargs['hexid']
+            if self.hexid == 'document': # special case for document psudo-element
+                self.valtype = document
+            
     
     def __repr__(self):
         return "Reference(%r, %r, %r)" % (self.doctype, self.filename, 
@@ -209,7 +212,7 @@ class Reference(object):
         if commit:
             if encoded_payload_length != bitstring.Bits(): # check for removal
                 self.write_to_file(processed_payload, encoded_payload_length, 
-                    new_offset)
+                    new_offset, filename)
             self.total_length += length_delta
             return ('okay', end_shift, self.total_length)
         return ('pending', end_shift, self.total_length + length_delta)
@@ -266,19 +269,23 @@ class Reference(object):
             length_delta += len(self.hexid)
         return (output_payload, encoded_payload_length, length_delta)
     
-    def write_to_file(self, payload, payload_length, offset):
+    def write_to_file(self, payload, payload_length, offset, filename):
+        if self.valtype == 'document':
+            shift = offset
+            for child in payload:
+                result = child.write(shift, True, filename)
+                shift = result[1]
         if self.valtype == 'container':
-            with open(self.filename, 'rb+') as file:
+            with open(filename, 'rb+') as file:
                 file.seek(offset)
                 file.write(self.hexid.bytes)
                 file.write(payload_length.bytes)
-            child_results = []
             shift = offset
             for child in payload:
-                result = child.write(shift)
+                result = child.write(shift, True, filename)
                 shift = result[1]
         else:
-            with open(self.filename, 'rb+') as file:
+            with open(filename, 'rb+') as file:
                 file.seek(offset)
                 file.write(self.hexid.bytes)
                 file.write(payload_length.bytes)
@@ -360,9 +367,8 @@ class Element(object):
     def write(self, new_offset=0, commit=True, filename=None):
         if self.writes_pending(new_offset):
             if not self.has_reference():
-                reference = Reference(self.doctype)
-            reference = self.reference # to get a dummy reference if needed
-            result = reference.write(self.payload, new_offset, commit)
+                reference = Reference(self.doctype, hexid=self.hexid)
+            result = reference.write(self.payload, new_offset, commit, filename)
             if result[0] == 'okay':
                 # if a write occured on a dummy reference, it's now a real
                 # reference and we need to be sure to save it.
@@ -372,7 +378,7 @@ class Element(object):
         return result
     
 
-class EBML(object):
+class EBML(Element):
     def __init__(self, filename, doctype=None):
         self.filename = filename
         if doctype:
@@ -381,6 +387,8 @@ class EBML(object):
             self.doctype = dtd.DoctypeBase()
             self.find_document_type()
         self.build_document()
+        self.hexid = 'document'
+        
     
     def __repr__(self):
         return 'EBML(%r)' % self.filename
@@ -404,7 +412,7 @@ class EBML(object):
             raise SyntaxError("Didn't find a document type declaration.")
     
     def build_document(self):
-        self.children = ContainerPayload()
+        self.payload = ContainerPayload()
         offset = 0
         end = os.stat(self.filename).st_size
         while True:
@@ -414,14 +422,12 @@ class EBML(object):
                 raise EOFError('Went too far, file is damaged.')
             reference = Reference(self.doctype, self.filename, offset)
             element = Element(self.doctype, reference)
-            self.children.append(element, keep_reference=True)
+            self.payload.append(element, keep_reference=True)
             offset = reference.end
     
-    def write(self):
-        pass
-    
 
 
-EBML('test.mkv')
-EBML('test2.mkv')
-EBML('test3.mkv')
+if __name__ == '__main__':
+    EBML('test.mkv')
+    EBML('test2.mkv')
+    EBML('test3.mkv')
