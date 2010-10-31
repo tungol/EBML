@@ -8,6 +8,7 @@ import os
 import re
 import datetime
 import spark
+import bitstring
 
 class BaseRange(object):
 	def __init__(self, value):
@@ -634,6 +635,7 @@ class DoctypeBase(object):
 			name = kids[0].attr
 			id_string = kids[1].attr
 			hexid = id_string.decode('hex')
+			hexid = bitstring.Bits(bytes=hexid)
 			type_class = self.types[kids[2].attr]
 			element = ElementTypeClass(name, hexid, type_class)
 			self.elements_name.update({name: element})

@@ -37,8 +37,9 @@ class Reference(object):
             self.dummy = True
             self.hexid = kwargs['hexid']
             if self.hexid == 'document': # special case for document psudo-element
-                self.valtype = document
-            
+                self.valtype = 'document'
+                self.name = 'document'
+                self.hexid_offset = 0
     
     def __repr__(self):
         return "Reference(%r, %r, %r)" % (self.doctype, self.filename, 
@@ -56,6 +57,10 @@ class Reference(object):
             if self.dummy:
                 return 0
             return self.get_payload_length()
+        if key == 'hexid_length':
+            if self.dummy:
+                return 0
+            return len(self.hexid.bytes) 
         elif key == 'end':
             self.end = self.total_length + self.hexid_offset
             return self.end
@@ -63,6 +68,8 @@ class Reference(object):
             self.size_offset = self.hexid_offset + self.hexid_length
             return self.size_offset
         elif key == 'size_length':
+            if self.dummy:
+                return 0
             return self.get_size_length()
         elif key == 'payload_offset':
             self.payload_offset = self.size_offset + self.size_length
@@ -91,10 +98,10 @@ class Reference(object):
                 hexid += byte
                 if len(hexid) > 8:
                     raise EOFError('Should have found an id by now: %r') % hexid
-                if hexid in self.doctype.get_ids():
+                if bitstring.Bits(bytes=hexid) in self.doctype.get_ids():
                     break
         self.hexid_length = len(hexid)
-        self.hexid = hexid
+        self.hexid = bitstring.Bits(bytes=hexid)
         return self.hexid
     
     def get_size_length(self):
@@ -171,7 +178,7 @@ class Reference(object):
             if payload == 0 and self.payload_length == 0:
                 return bitstring.Bits()
             elif payload < 0:
-                minlength = int(math.ceil(math.log(math.abs(payload), 2)/8) + 1)
+                minlength = int(math.ceil(math.log(math.fabs(payload), 2)/8) + 1)
             else:
                 minlength = int(math.ceil(math.log(payload+1, 2)/8) + 1)
             if minlength < self.payload_length:
@@ -205,17 +212,17 @@ class Reference(object):
     
     def write(self, new_payload, new_offset=0, commit=True, filename=None):
         return_tuple = self.process_payload(new_payload, new_offset)
-        processed_payload = return_tuple[1]
-        encoded_payload_length = return_tuple[2]
-        length_delta = return_tuple[3]
+        processed_payload = return_tuple[0]
+        encoded_payload_length = return_tuple[1]
+        length_delta = return_tuple[2]
         end_offset = new_offset + self.total_length + length_delta
         if commit:
             if encoded_payload_length != bitstring.Bits(): # check for removal
                 self.write_to_file(processed_payload, encoded_payload_length, 
                     new_offset, filename)
             self.total_length += length_delta
-            return ('okay', end_shift, self.total_length)
-        return ('pending', end_shift, self.total_length + length_delta)
+            return ('okay', end_offset, self.total_length)
+        return ('pending', end_offset, self.total_length + length_delta)
     
     def process_payload(self, input_payload, new_offset):
         if self.name == 'Void':
@@ -227,7 +234,7 @@ class Reference(object):
         if self.dummy:
             return self.process_normal(input_payload, new_offset)
         remove_self = False
-        offset_delta = new_offset - self.offset
+        offset_delta = new_offset - self.hexid_offset
         if self.total_length - 2 >= offset_delta:
             length_delta = -offset_delta # shrink by the offset_delta
         elif self.total_length - 1 == offset_delta:
@@ -236,36 +243,36 @@ class Reference(object):
             remove_self = True # dissapear entirely
             length_delta = -self.total_length
         if not remove_self:
-            total_length = self.total_length + self.length_delta
+            total_length = self.total_length + length_delta
             size_length = int(math.ceil(math.log(total_length+1, 2)))
             size_length_delta = self.size_length - size_length
             payload_length_delta = length_delta - size_length_delta
             payload_length = self.payload_length + payload_length_delta
             encoded_payload_length = self.encode_payload_length(payload_length)
-            output_payload = bitstring.Bits(bytes='\x00' * encoded_payload_length)
+            output_payload = bitstring.Bits(bytes=('\x00' * payload_length))
         else:
             output_payload = bitstring.Bits()
             encoded_payload_length = bitstring.Bits()
         return (output_payload, encoded_payload_length, length_delta)
     
     def process_normal(self, input_payload, new_offset):
-        if self.valtype == 'container':
+        if self.valtype in ('container', 'document'):
             output_payload = input_payload
             child_results = []
             shift = new_offset
-            for child in new_payload:
+            for child in input_payload:
                 result = child.write(shift, False)
                 child_results.append(result)
                 shift = result[1]
             payload_length = sum([result[2] for result in child_results])
         else:
-            output_payload = self.encode_payload(new_payload)
+            output_payload = self.encode_payload(input_payload)
             payload_length = len(output_payload.bytes)
         encoded_payload_length = self.encode_payload_length(payload_length)
-        payload_length_delta = new_payload_length - self.payload_length
+        payload_length_delta = payload_length - self.payload_length
         size_length_delta = len(encoded_payload_length.bytes) - self.size_length
         length_delta = payload_length_delta + size_length_delta
-        if not self.has_reference():
+        if self.dummy:
             length_delta += len(self.hexid)
         return (output_payload, encoded_payload_length, length_delta)
     
@@ -275,21 +282,31 @@ class Reference(object):
             for child in payload:
                 result = child.write(shift, True, filename)
                 shift = result[1]
-        if self.valtype == 'container':
-            with open(filename, 'rb+') as file:
-                file.seek(offset)
-                file.write(self.hexid.bytes)
-                file.write(payload_length.bytes)
+        elif self.valtype == 'container':
+            try:
+                with open(filename, 'r+b') as file:
+                    file.seek(offset)
+                    file.write(self.hexid.bytes)
+                    file.write(payload_length.bytes)
+            except IOError:
+                with open(filename, 'w+b') as file:
+                    file.seek(offset)
+                    print(repr(self.hexid.bytes))
+                    file.write(self.hexid.bytes)
+                    print(repr(payload_length.bytes))
+                    file.write(payload_length.bytes)
             shift = offset
             for child in payload:
                 result = child.write(shift, True, filename)
                 shift = result[1]
         else:
-            with open(filename, 'rb+') as file:
+            with open(filename, 'r+b') as file:
                 file.seek(offset)
                 file.write(self.hexid.bytes)
                 file.write(payload_length.bytes)
                 file.write(payload.bytes)
+        if self.valtype != 'container':
+            self.dummy = False
     
 
 class Element(object):
@@ -311,14 +328,15 @@ class Element(object):
             raise TypeError('__init__() takes at most 3 arguments (%s given)' % len(args))
     
     def __repr__(self):
-        if self.has_reference():
-            return 'Element(%r, %r)' % (self.doctype, self.reference)
-        else:
-            return 'Element(%r, %r, %r)' % (self.doctype, self.hexid, self.payload)
+        #if self.has_reference():
+        #    return 'Element(%r, %r)' % (self.doctype, self.reference)
+        #else:
+        #    return 'Element(%r, %r, %r)' % (self.doctype, self.hexid, self.payload)
+        return self.__str__()
     
     def __str__(self):
         if 'payload' in dir(self):
-            return '<%s element with value %r>' % (self.name, self.payload)
+            return '<%s element, %r>' % (self.name, self.payload)
         else:
             return '<%s element, %s>' % (self.name, self.reference)
     
@@ -337,6 +355,8 @@ class Element(object):
             return self.dummy_reference
         elif key == 'reference':
             return self.dummy_reference
+        elif key == 'total_length':
+            return self.reference.total_length
         else:
             raise AttributeError
     
@@ -344,10 +364,13 @@ class Element(object):
         if self.valtype == 'container':
             return iter(self.payload)
     
-    def has_write_pending(self, new_offset=None):
+    def has_write_pending(self, new_offset=None, new_filename=None):
         if self.has_reference():
+            if new_filename != None:
+                if new_filename != self.reference.filename:
+                    return True
             if new_offset != None:
-                if new_offset != self.reference.offset:
+                if new_offset != self.reference.hexid_offset:
                     return True
             if self.payload == self.reference.payload:
                 if self.valtype == 'container':
@@ -365,9 +388,11 @@ class Element(object):
         return False
     
     def write(self, new_offset=0, commit=True, filename=None):
-        if self.writes_pending(new_offset):
+        if self.has_write_pending(new_offset, filename):
             if not self.has_reference():
                 reference = Reference(self.doctype, hexid=self.hexid)
+            else:
+                reference = self.reference
             result = reference.write(self.payload, new_offset, commit, filename)
             if result[0] == 'okay':
                 # if a write occured on a dummy reference, it's now a real
@@ -425,9 +450,15 @@ class EBML(Element):
             self.payload.append(element, keep_reference=True)
             offset = reference.end
     
+    def write(self, filename):
+        Element.write(self, filename=filename)
+    
 
 
 if __name__ == '__main__':
-    EBML('test.mkv')
+    a = EBML('test.mkv')
+    a.payload[0].payload[1].payload = 2
+    a.write('writetest.mkv')
+    b = EBML('writetest.mkv')
     EBML('test2.mkv')
     EBML('test3.mkv')
