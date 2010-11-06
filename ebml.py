@@ -202,7 +202,7 @@ class Reference(object):
     
     def encode_payload_length(self, payload_length):
         minlength = int(math.ceil(math.log(payload_length+1, 2)))
-        length = int(math.ceil(minlength/7))
+        length = int(math.ceil(minlength / 7))
         bytelength = max((length, self.size_length))
         padding_amount = (((bytelength * 8) - minlength) - bytelength)
         tmp_str = ('0' * (bytelength-1)) + '1' + ('0' * padding_amount)
@@ -238,7 +238,7 @@ class Reference(object):
         if self.total_length - 2 >= offset_delta:
             length_delta = -offset_delta # shrink by the offset_delta
         elif self.total_length - 1 == offset_delta:
-            length_delta = self.total_length - 2 # can't have a void of length 1
+            length_delta = -(self.total_length - 2) # can't have a void of length 1
         else: # void is equal to or smaller than shift
             remove_self = True # dissapear entirely
             length_delta = -self.total_length
@@ -258,13 +258,22 @@ class Reference(object):
     def process_normal(self, input_payload, new_offset):
         if self.valtype in ('container', 'document'):
             output_payload = input_payload
-            child_results = []
-            shift = new_offset
-            for child in input_payload:
-                result = child.write(shift, False)
-                child_results.append(result)
-                shift = result[1]
-            payload_length = sum([result[2] for result in child_results])
+            size_length = self.size_length
+            while True:
+                child_results = []
+                shift = new_offset + self.hexid_length + size_length
+                for child in input_payload:
+                    result = child.write(shift, False)
+                    child_results.append(result)
+                    shift = result[1]
+                payload_length = sum([result[2] for result in child_results])
+                minlength = int(math.ceil(math.log(payload_length+1, 2)))
+                length = int(math.ceil(minlength / 7))
+                bytelength = max((length, self.size_length))
+                if bytelength == size_length:
+                    break
+                else:
+                    size_length = bytelength
         else:
             output_payload = self.encode_payload(input_payload)
             payload_length = len(output_payload.bytes)
@@ -291,11 +300,9 @@ class Reference(object):
             except IOError:
                 with open(filename, 'w+b') as file:
                     file.seek(offset)
-                    print(repr(self.hexid.bytes))
                     file.write(self.hexid.bytes)
-                    print(repr(payload_length.bytes))
                     file.write(payload_length.bytes)
-            shift = offset
+            shift = offset + self.hexid_length + len(payload_length.bytes)
             for child in payload:
                 result = child.write(shift, True, filename)
                 shift = result[1]
@@ -357,6 +364,8 @@ class Element(object):
             return self.dummy_reference
         elif key == 'total_length':
             return self.reference.total_length
+        elif key == 'end':
+            return self.reference.end
         else:
             raise AttributeError
     
@@ -399,7 +408,7 @@ class Element(object):
                 # reference and we need to be sure to save it.
                 self.reference = reference
         else:
-            result = ('unneeded', 0, self.total_length)
+            result = ('unneeded', self.end, self.total_length)
         return result
     
 
@@ -460,5 +469,5 @@ if __name__ == '__main__':
     a.payload[0].payload[1].payload = 2
     a.write('writetest.mkv')
     b = EBML('writetest.mkv')
-    EBML('test2.mkv')
-    EBML('test3.mkv')
+#    EBML('test2.mkv')
+#    EBML('test3.mkv')
