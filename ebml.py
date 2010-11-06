@@ -12,6 +12,11 @@ import math
 # population/depopulation of default values
 # mandatory values checking for header
 # void handling is currently broken and turned off, fix this
+# simplify editing interface
+# larger (read: reasonably sized videos) files are spending too long in fake
+#       writes. Need to optimize this, do it another way, or something. Working
+#       void handling will help with this, maybe. Some caching might help?
+#       but I think I might just need to find a way to reduce/eliminate this step.
 
 class ContainerPayload(list):
     def __init__(self, *args, **kwargs):
@@ -218,6 +223,7 @@ class Reference(object):
         return width + number
     
     def write(self, new_payload, new_offset=0, commit=True, filename=None):
+        print((commit, self.name))
         return_tuple = self.process_payload(new_payload, new_offset)
         processed_payload = return_tuple[0]
         encoded_payload_length = return_tuple[1]
@@ -293,7 +299,7 @@ class Reference(object):
         return (output_payload, encoded_payload_length, length_delta)
     
     def write_to_file(self, payload, payload_length, offset, filename):
-        #print(self.name)
+        print(self.name)
         if self.valtype == 'document':
             shift = offset
             for child in payload:
@@ -478,9 +484,16 @@ class EBML(Element):
 
 
 if __name__ == '__main__':
-    a = EBML('test.mkv')
+#    a = EBML('test.mkv')
+#    a.payload[0].payload[1].payload = 300
+#    a.write('writetest.mkv')
+#    b = EBML('writetest.mkv')
+    a = EBML('test2.mkv')
     a.payload[0].payload[1].payload = 300
-    a.write('writetest.mkv')
-    b = EBML('writetest.mkv')
-#    EBML('test2.mkv')
-#    EBML('test3.mkv')
+    a.write('writetest2.mkv')
+    b = EBML('writetest2.mkv')
+#    a = EBML('test3.mkv')
+#    a.payload[0].payload[1].payload = 300
+#    a.write('writetest3.mkv')
+#    b = EBML('writetest3.mkv')
+    
