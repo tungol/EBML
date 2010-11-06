@@ -6,6 +6,11 @@ import dtd
 import bitstring
 import math
 
+# to do: 
+# checking of data for range etc.
+# if a file gets shorter, make sure to actually shrink the file
+# population/depopulation of default values
+
 class ContainerPayload(list):
     def __init__(self, *args, **kwargs):
         list.__init__(self, *args, **kwargs)
@@ -335,11 +340,11 @@ class Element(object):
             raise TypeError('__init__() takes at most 3 arguments (%s given)' % len(args))
     
     def __repr__(self):
-        #if self.has_reference():
-        #    return 'Element(%r, %r)' % (self.doctype, self.reference)
-        #else:
-        #    return 'Element(%r, %r, %r)' % (self.doctype, self.hexid, self.payload)
-        return self.__str__()
+        if self.has_reference():
+            return 'Element(%r, %r)' % (self.doctype, self.reference)
+        else:
+            return 'Element(%r, %r, %r)' % (self.doctype, self.hexid, self.payload)
+        #return self.__str__()
     
     def __str__(self):
         if 'payload' in dir(self):
