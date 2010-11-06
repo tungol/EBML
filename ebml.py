@@ -10,6 +10,8 @@ import math
 # checking of data for range etc.
 # if a file gets shorter, make sure to actually shrink the file
 # population/depopulation of default values
+# mandatory values checking for header
+# void handling is currently broken and turned off, fix this
 
 class ContainerPayload(list):
     def __init__(self, *args, **kwargs):
@@ -183,7 +185,7 @@ class Reference(object):
             if payload == 0 and self.payload_length == 0:
                 return bitstring.Bits()
             elif payload < 0:
-                minlength = int(math.ceil(math.log(math.fabs(payload), 2)/8) + 1)
+                minlength = int(math.floor(math.log(math.fabs(payload), 2)/8) + 1)
             else:
                 minlength = int(math.ceil(math.log(payload+1, 2)/8) + 1)
             if minlength < self.payload_length:
@@ -231,7 +233,7 @@ class Reference(object):
     
     def process_payload(self, input_payload, new_offset):
         if self.name == 'Void':
-            return self.process_void(input_payload, new_offset)
+            return self.process_normal(input_payload, new_offset)
         else:
             return self.process_normal(input_payload, new_offset)
     
@@ -291,6 +293,7 @@ class Reference(object):
         return (output_payload, encoded_payload_length, length_delta)
     
     def write_to_file(self, payload, payload_length, offset, filename):
+        #print(self.name)
         if self.valtype == 'document':
             shift = offset
             for child in payload:
@@ -301,7 +304,9 @@ class Reference(object):
                 with open(filename, 'r+b') as file:
                     file.seek(offset)
                     file.write(self.hexid.bytes)
+                    #print(repr(self.hexid.bytes))
                     file.write(payload_length.bytes)
+                    #print(repr(payload_length.bytes))
             except IOError:
                 with open(filename, 'w+b') as file:
                     file.seek(offset)
@@ -315,8 +320,11 @@ class Reference(object):
             with open(filename, 'r+b') as file:
                 file.seek(offset)
                 file.write(self.hexid.bytes)
+                #print(repr(self.hexid.bytes))
                 file.write(payload_length.bytes)
+                #print(repr(payload_length.bytes))
                 file.write(payload.bytes)
+                #print(repr(payload.bytes))
         if self.valtype != 'container':
             self.dummy = False
     
@@ -471,7 +479,7 @@ class EBML(Element):
 
 if __name__ == '__main__':
     a = EBML('test.mkv')
-    a.payload[0].payload[1].payload = 2
+    a.payload[0].payload[1].payload = 300
     a.write('writetest.mkv')
     b = EBML('writetest.mkv')
 #    EBML('test2.mkv')
