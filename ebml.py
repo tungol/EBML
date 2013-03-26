@@ -18,6 +18,24 @@ import math
 #       void handling will help with this, maybe. Some caching might help?
 #       but I think I might just need to find a way to reduce/eliminate this step.
 
+"""
+Quick documentation:
+
+EBML represents the EBML file. It contains Elements at various locations.
+Element is an abstract EBML element. It can be linked to a specific location in
+a file with a Reference, or not.
+A Reference contains the interface between an Elment and the file the contains
+it. A lot of the heavy lifting goes on in this class.
+EOFError is just an exception that I needed.
+ContainerPayload is a list of elements, with some logic around when a reference
+on an element gets destroyed.
+
+Payloads nest. To use, setup the EBML class with a filename, then call 
+EBML.payload and drill down through the hierarchy until you find where you want
+to make edits. The entire file is not read out immediately. The parts needed for
+a call are read out as needed. Make the edits, and write them out.
+"""
+
 class ContainerPayload(list):
     def __init__(self, *args, **kwargs):
         list.__init__(self, *args, **kwargs)

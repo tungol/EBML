@@ -2,6 +2,21 @@
 This module defines class hierarchies for parsing of EBML doctype declarations.
 
 It should not generally be neccesary to deal directly with anything here. 
+
+Quick documentation: Doctype and DoctypeBase are the only things that should 
+need to be called outside of this file. Doctype sets up an entire doctype from 
+the doctype definition file specified when you call it. If you don't know what 
+type of file you have yet, DoctypeBase sets up a minimal environment that will
+allow you to read an EBML file long enough to hit the doctype declaration. Get
+this, then setup Doctype with whatever you find.
+
+The Ranges, RangeLists, Types, and ElementTypeClass are all different types of
+entities that exist in an doctype.
+
+EDTDScannerBase, EDTDScanner, EDTDParser, and CleanAST use the SPARK 
+lexer/parser library to process the EBML doctype declaration files.
+
+universal_checker and check_match are some minor convenience functions.
 """
 
 import os
@@ -730,7 +745,7 @@ class EDTDScannerBase(spark.GenericScanner):
 	def __init__(self):
 		spark.GenericScanner.__init__(self)
 	
-	def  tokenize(self, input):
+	def tokenize(self, input):
 		self.rv = []
 		spark.GenericScanner.tokenize(self, input)
 		return self.rv
