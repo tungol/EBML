@@ -1,0 +1,32 @@
+known deviations from spec:
+
+- I parse '%children;' as three tokens: '%', 'children', ';'. This means that whitespace (and comments) are allowed in there. The spec regards '%children;' as a single token, with no allowed whitespace. This shouldn't be a big deal.
+
+- the BNF form for the date definitions doesn't seem to match with the text: I went with the text.
+
+- both the text and the BNF agree the UintRanges can't be open ended, but the EDTD for matroska contains an element which uses it as open ended:
+	BlockAddID := ee uint [ range:1..; ]
+I have to allow UintRanges to be open-ended in order to parse this. The matroska documentation confirms the open-ended range. I'm interpreting it like the level range BNF. There are several other elements in the matroska EDTD that have the same open uint range as well.
+
+comment on the BNF for types defs says can only be def and range, examples in the text use size and range. Matroska DTD only uses range.
+
+TrackUID is uint in the matroska DTD, should be binary?
+
+found in file with writing app: "mkvmerge v2.3.0 ('Freak U') built on Sep  9 2008 17:43:22"
+and muxingapp: 'libebml v0.7.8 + libmatroska v0.8.1'
+	'55aa' not in the matroska dtd, but appears in sample file. 
+	Child of "TrackEntry" container, between a "FlagDefault" and a 
+	"FlagLacing" element.
+
+	'55ee' element not in dtd, but appears in file. 
+	Child of "TrackEntry" container, between a "TrackTimecodeScale" 
+	and a "CodecID" element.
+
+	'9f' element not in dtd, appears in file. 
+	Child of "Audio" container, appears after a SamplingFrequency 
+	element, last element in container.
+
+'libebml v0.7.7 + libmatroska v0.8.1'
+"mkvmerge v2.9.7 ('Tenderness') built on Jul  1 2009 18:43:35"
+'a3' element, appears in a file. Child of Cluster containers, seem to be a newer version of the block structure? Lots of them, and they're big.
+	

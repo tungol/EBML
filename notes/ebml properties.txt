@@ -1,0 +1,27 @@
+'name': case insensitive, set at the element level
+'valtype': must be a valid type, set at the element level
+'id': hex ID, set at the element level
+'default': 'def' , same type as the type of the element OR a symbol referencing a previously seen symbol. If the symbol hasn't been seen, no error, but don't add it.
+'parent': 'parent' : name | name , name, name (etc) 
+	parent is also set by hierarchy
+'level': 'level' : digit+ ( ".." digit* )?
+'cardnality':  'card' : '*', '?', '1', or '+'
+'ordered': 'ordered' : 'yes' 'no' '1' '0'
+'range': 'range' : (valid range depends on element type)
+'size': 'size' : uint_range (, uint_range+)?
+
+valtype: valid values depend on type environment
+default: depends on type of the element
+level: mutiple token sequence
+range: depends on element type, multiple token sequence
+size: multiple token sequence
+
+types:
+	int, uint, float, string, date, binary, container
+
+range types:
+	uint: uint, binary, string
+	int: int
+	float: float
+	date: date
+(range is invalid for containers)

@@ -1,0 +1,47 @@
+starting information: 
+	starting_shift: accumulated offset from previous elements
+	max_shift: maximum number of bytes that can be shifted
+		going over this returns a max shift exceeded result
+	commit: False for information gathering run
+		True for commit only if payload size is the same
+		integer values for how much the next element was moved forward 
+		to allow for write. 
+		If it's not the correct number needed, write fails.
+		(this ensures two stage writes:
+		information gathered and passed back up
+		validity of the commit checked at high levels
+		then the actual commit happens in reverse order 
+		so data is never lost, even if the commit is interrupted.)
+	upcoming: the next element in the file. If it's void, then expansion
+		can happen, up to the limit of the void size, wiping out
+		any accumulated shifting
+			
+
+check if there's a new payload
+
+if no new payload, return no write to be made
+
+if new paylad:
+calculate new payload size
+compare to old payload size
+
+if same:
+	no problem, write is good. if commit, commit it.
+
+if different:
+	size_delta = payload_size_delta
+
+	can the new payload_length be encoded in the same size_length as before?
+	yes: okay, move on
+	no: size_delta += size_length_delta
+
+	if commit:
+		if type(commit) == int:
+			if size_delta + starting_shift == commit:
+				proper amount of space is available, do it
+			else:
+				incorrect information, fail
+	else:
+		return a result for the size_delta
+
+	

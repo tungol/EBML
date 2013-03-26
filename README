@@ -1,0 +1,5 @@
+Some old code I wrote. It's an implementation of EBML as described at <http://www.matroska.org/technical/specs/rfc/index.html>. 
+
+Matroska doesn't actually use the document type definitions described in that file, but I went ahead and implemented it that way anyway. Oh well.
+
+It runs really slowly on a video file of any real size, but it does work.

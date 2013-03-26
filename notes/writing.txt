@@ -1,0 +1,43 @@
+size deltas
+
+every item needs to move forward by the sum of the deltas of the items behind it
+can I implement max_shift without doing a pass? I think so, but adjusting for the voids is the tricky part.
+
+can I check for voids on the size deltas step?
+
+only the item preceeding a void, on the same level of the hierarchy as the void is allowed to claim space in it. This prevents conflicts.
+
+how does starting shift interplay with voids? Voids should eat into that too, if they can.
+
+so I'm back to the soft_write-write situation. The first step needs all the same information as a real write, except for the commit value.
+
+
+simple case:
+uint_element.write(start_shift=start_shift, upcoming=upcoming)
+=====>	delta = self.get_delta_size()
+	shift = delta+start_shift
+	if upcoming=void:
+		if (void.size - 2 >= shift) or (void.size == shift):
+			shift = 0
+		else:
+			shift = shift - (void_size - 2)
+	if commit
+
+----------------
+
+get length delta
+void handling
+amount shifted checking
+?commit
+	update self.payload_length first
+		if size_length_delta = 0 AND starting_shift = 0
+ 
+run children
+get length delta
+void halding
+amount shifted checking (self if starting shift, else sum of children)
+?commit
+	update self.payload_length first
+		if size_length_delta = 0 AND starting_shift = 0
+	then work in reverse order on children
+	don't forget to check for voids to be removed entirely
